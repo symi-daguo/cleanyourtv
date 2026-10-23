@@ -19,6 +19,8 @@
 
 本文介绍通用功能和使用方法。不同机型、地区和固件的应用包及限制可能不同，请先核对自己的设备。功能变化以[英文 README](README.md)为准，具体机型记录见[机型清单](examples/README.md)。
 
+> **本 Fork**：在 v2.7 基础上补全简体中文（136/136），并加入光峰/峰米 FengOS 的 Home 键重定向。实机为光峰 FMProjA2（Android 9）。安装步骤、限制和恢复方法见 [FORK.zh-CN.md](FORK.zh-CN.md)。
+
 ![原生 Google TV 桌面与 CleanYourTV 桌面对比](docs/stock-vs-new-side.jpg)
 
 ## 工作原理
@@ -143,6 +145,8 @@ Linux 安装脚本可查找 `~/Android/Sdk` 和 `PATH` 中的 Java。准备好�
 TV_HOST=192.168.1.50 launcher/build-and-install.sh
 ```
 
+> **光峰/峰米 FengOS 例外**：该固件不允许第三方应用成为系统 HOME，`build-and-install.sh` 会在 `set-home-activity` 处失败。请改用 [FORK.zh-CN.md](FORK.zh-CN.md) 的手动安装步骤；原桌面保持启用，通过辅助功能 Home 键重定向进入本桌面。
+
 **此 Shell 脚本不仅安装 APK，还会切换默认 HOME，并按检测结果停用原始桌面。** 它先确认新桌面能够启动，再完成切换；切换失败时尝试回退。自动识别仅支持 `com.google.android.tvlauncher`、`com.google.android.apps.tv.launcherx`、`com.google.android.leanbacklauncher` 和 `com.mitv.tvhome`；若识别失败，需核对设备后指定 `STOCK_LAUNCHER=<包名>`，或使用 `none`。
 
 可使用 `STOCK_LAUNCHER=<包名>` 指定原始桌面；如果希望保留原始桌面的启用状态，使用：
@@ -202,7 +206,7 @@ TV_HOST=192.168.1.50 tools/theme.sh --reset
 
 以下 ADB 命令使用 macOS/Linux 的虚拟环境路径；Windows 将前缀 `tools/venv/bin/python -I tools/tv.py` 换为 `tools\venv\Scripts\python.exe -I tools\tv.py`。
 
-- **语言**随电视系统切换，包括简体中文和繁体中文。Android 13 及以上也支持单独设置应用语言，例如：`tools/venv/bin/python -I tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales zh-CN'`。
+- **语言**随电视系统切换，包括简体中文和繁体中文。本 Fork 已补全全部 136 条简体中文文案，光峰 FMProjA2 实机默认显示中文。Android 13 及以上也支持单独设置应用语言，例如：`tools/venv/bin/python -I tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales zh-CN'`。
 - **时钟屏保**可在电视的屏保设置中选择 Clock；也可执行：`tools/venv/bin/python -I tools/tv.py 'settings put secure screensaver_components com.gathin.tvhome/.ClockDream; settings put secure screensaver_enabled 1'`。
 - **输入源键**可在 macOS/Linux 安装时使用 `INPUT_KEY_SERVICE=1` 启用辅助功能服务，以适配 Google TV 的遥控器输入源按钮；Windows 使用 `-InputKeyService`。
 - **HOME / 设置键**可在 macOS/Linux 安装时使用 `HOME_KEY_SERVICE=1`，并通过 `config.xml` 中的按键配置适配部分设备；Windows 使用 `-HomeKeyService`。`settings_key_panel` 可启用快捷设置面板，提供电视设置、显示、网络、应用和桌面设置入口。重装时需重新传入所需的服务选项。
