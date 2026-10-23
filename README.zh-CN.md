@@ -19,7 +19,7 @@
 
 本文介绍通用功能和使用方法。不同机型、地区和固件的应用包及限制可能不同，请先核对自己的设备。功能变化以[英文 README](README.md)为准，具体机型记录见[机型清单](examples/README.md)。
 
-> **本 Fork**：在 v2.7 基础上补全简体中文（136/136），并加入光峰/峰米 FengOS 的 Home 键重定向。实机为光峰 FMProjA2（Android 9）。安装步骤、限制和恢复方法见 [FORK.zh-CN.md](FORK.zh-CN.md)。
+> **本 Fork**：在 v2.7 基础上补全简体中文（136/136），并加入光峰/峰米 FengOS 的 Home 键重定向。实机为光峰 FMProjA2（Android 9）。安装步骤、限制和恢复方法见 [FORK.zh-CN.md](FORK.zh-CN.md)；已构建 APK 见 [Release](https://github.com/symi-daguo/cleanyourtv/releases/tag/v2.7-zh-cn.1)。
 
 ![原生 Google TV 桌面与 CleanYourTV 桌面对比](docs/stock-vs-new-side.jpg)
 

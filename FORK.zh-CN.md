@@ -45,6 +45,13 @@ HOME，而是使用上游 2.7 的 `stock_home_redirect` + `HomeKeyService`：
 
 ## 安装
 
+已构建的 APK（debug 签名，2.7，versionCode 8）：
+
+- Release 下载：<https://github.com/symi-daguo/cleanyourtv/releases/tag/v2.7-zh-cn.1>
+- SHA-256：`a078092068dc7d043ba0eac5470b8425cb795562e586ab8faa77bd9f5652813c`
+
+也可以从源码构建：
+
 ```bash
 # 1. 编译
 cd launcher
