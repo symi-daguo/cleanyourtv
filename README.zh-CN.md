@@ -93,12 +93,37 @@
 
 ## 支持哪些设备
 
-清理清单面向 **Android TV / Google TV**；当前桌面 APK 要求 **Android 8.0（API 26）或更高版本**。社区提供了多种电视与电视盒子的配置；其中一些设备运行的 Android 版本低于桌面的最低要求，清理清单不代表桌面可安装。请在[机型清单](examples/README.md)中核对型号、地区和固件，阅读对应目录的说明，再使用停用列表。
+清理清单面向 **Android TV / Google TV**；上游桌面 APK 要求 **Android 8.0（API 26）或更高版本**。本 Fork 额外支持 **Android 6.0（API 23）起的老电视**：构建时带 `-PlauncherMinSdk=23`，已实测海信 VIDAA（Android 6.0）跑通，详见 [海信机型记录](docs/devices/hisense-vidaa-laser.md)。社区提供了多种电视与电视盒子的配置；其中一些设备运行的 Android 版本低于桌面的最低要求，清理清单不代表桌面可安装。请在[机型清单](examples/README.md)中核对型号、地区和固件，阅读对应目录的说明，再使用停用列表。
 
 - Samsung Tizen 和 LG webOS 不能直接运行本项目的 Android 桌面；[docs/devices/samsung-tizen.md](docs/devices/samsung-tizen.md) 记录了一台 2021 年 Tizen 机型在局域网里暴露的接口（没有 ADB，因而无法停用应用），社区移植项目可参考[社区作品](SHOWCASE.md)。
 - Fire TV 的清理记录可供手动适配；[操作提示词](PROMPT.md)不适用于 Fire TV，Fire OS 也限制替换默认桌面。
 - 部分中国大陆版电视会拒绝侧载 APK 或安装第三方 HOME 桌面，已记录的 TCL 机型只是其中的例子。不能仅凭品牌判断兼容性。
 - 没有现成清单时，可以让助手检查实际设备，并按[贡献指南](CONTRIBUTING.md)提交经过验证的机型记录。
+
+## 让智能体一键装（skill 包）
+
+如果你用的是 Claude Code、Codex、Cursor 或其它支持 skill 的智能体，把 `skills/cleanyourtv-cn/` 整个目录放进它的技能目录，然后一句话交代需求即可，例如「把电视桌面装到 192.168.1.50 上并确认能用」。
+
+也可以在仓库根目录直接跑，不需要智能体：
+
+```bash
+# 安装并启动：自动读电视的 Android 版本，选对构建参数
+skills/cleanyourtv-cn/scripts/install.sh 192.168.1.50
+
+# 逐项核对，输出「通过 / 警告 / 失败」清单，退出码 0 表示没有失败项
+skills/cleanyourtv-cn/scripts/verify.sh 192.168.1.50
+
+# 卸载，回到原状
+skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
+```
+
+`install.sh` 会自动处理版本差异：Android 8.0 及以上用默认构建（479 KB），Android 6.0–7.1 自动带 `-PlauncherMinSdk=<SDK>` 重新构建（698 KB，多了 `java.time` 的兼容层）。低于 Android 6.0 会直接拒绝，不浪费你的时间。
+
+验证清单共 7 项，只有全部「通过」才算装好：连接、已安装、停在前台、无崩溃、界面中文、默认桌面归属、原桌面仍启用可回退。
+
+技能包还包含一封[故障排查手册](skills/cleanyourtv-cn/references/troubleshooting.md)，按 adb 报错对号入座，包括侧载被拒、签名冲突、Home 键不生效、输入源菜单为空等。
+
+**本 skill 只安装和验证，不停用任何系统包。** 去膨胀是另一件事，必须走 `tools/disable.sh` 并遵守[操作提示词](PROMPT.md)的安全规则。
 
 ## 手动操作
 
@@ -206,7 +231,9 @@ TV_HOST=192.168.1.50 tools/theme.sh --reset
 
 以下 ADB 命令使用 macOS/Linux 的虚拟环境路径；Windows 将前缀 `tools/venv/bin/python -I tools/tv.py` 换为 `tools\venv\Scripts\python.exe -I tools\tv.py`。
 
-- **语言**随电视系统切换，包括简体中文和繁体中文。本 Fork 已补全全部 136 条简体中文文案，光峰 FMProjA2 实机默认显示中文。Android 13 及以上也支持单独设置应用语言，例如：`tools/venv/bin/python -I tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales zh-CN'`。
+- **语言**：桌面**没有应用内语言开关**，语言由系统决定。本 Fork 已补全全部简体中文文案（135 条字符串 + 1 条复数规则），光峰 FMProjA2 与海信 VIDAA 实机均默认显示中文。
+  - **Android 13 及以上**可以只给桌面单独设语言：`adb shell cmd locale set-app-locales com.gathin.tvhome --locales zh-CN`（切英文把 `zh-CN` 换成 `en`）。查当前值用 `cmd locale get-app-locales com.gathin.tvhome`。
+  - **Android 12 及以下**只能改系统语言，桌面跟着走：电视 → 设置 → 系统 → 语言。国内电视出厂就是 `zh-CN`，通常不用动。
 - **时钟屏保**可在电视的屏保设置中选择 Clock；也可执行：`tools/venv/bin/python -I tools/tv.py 'settings put secure screensaver_components com.gathin.tvhome/.ClockDream; settings put secure screensaver_enabled 1'`。
 - **输入源键**可在 macOS/Linux 安装时使用 `INPUT_KEY_SERVICE=1` 启用辅助功能服务，以适配 Google TV 的遥控器输入源按钮；Windows 使用 `-InputKeyService`。
 - **HOME / 设置键**可在 macOS/Linux 安装时使用 `HOME_KEY_SERVICE=1`，并通过 `config.xml` 中的按键配置适配部分设备；Windows 使用 `-HomeKeyService`。`settings_key_panel` 可启用快捷设置面板，提供电视设置、显示、网络、应用和桌面设置入口。重装时需重新传入所需的服务选项。

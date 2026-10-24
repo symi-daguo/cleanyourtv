@@ -17,6 +17,7 @@
 | **API 23 桥接层**：`Compat.java` 收口 23 处 24/26 才有的调用，每处都降级到老版本等价路径；API 26+ 行为不变 | `launcher/app/src/main/java/com/gathin/tvhome/Compat.java` + 6 个调用文件 |
 | **TV framework 缺失降级**：`Compat.tvInputs()` 探测 `TvInputManager` 底层 binder，缺失时返回 null，避免 VIDAA（无 `tv_input`）启动即崩 | `Compat.java`、`MainActivity.java` |
 | 新增机型记录 | `docs/devices/fengmi-fmproja2.md`、`docs/devices/hisense-vidaa-laser.md`、`examples/README.md` |
+| **中文智能体技能包**：`skills/cleanyourtv-cn/`。`install.sh` 读电视 SDK 自动选构建参数（<26 自动带 `-PlauncherMinSdk`）、`verify.sh` 给 7 项通过/警告/失败清单、`uninstall.sh` 回滚；附按报错对号入座的排查手册 | `skills/cleanyourtv-cn/` |
 | README 中文说明 | `README.zh-CN.md` |
 
 ## 实机验证
