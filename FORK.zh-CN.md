@@ -1,7 +1,10 @@
-# CleanYourTV 中文 / 光峰 FengOS Fork
+# CleanYourTV 中文 / 光峰 FengOS / 海信 VIDAA 低版本 Fork
 
 本仓库 fork 自 [Gathin23/cleanyourtv](https://github.com/Gathin23/cleanyourtv)，基于上游 **v2.7**。
-保留上游全部功能和构建方式，只增加简体中文补全与光峰/峰米 FengOS 的 Home 键适配。
+保留上游全部功能和构建方式，增加简体中文补全、光峰/峰米 FengOS 的 Home 键适配，以及
+**Android 6.0（API 23）低版本支持**（海信 VIDAA）。
+
+默认构建与上游完全一致（`minSdk 26`），低版本适配只在显式传参时启用，因此上游同步与 CI 体积门都不受影响。
 
 ## 改了什么
 
@@ -10,10 +13,15 @@
 | 简体中文文案补全到 **136/136** 条（上游 2.7 原有 61 条，缺少模块卡片、壁纸、快捷设置、F1 赛事、VPN 等） | `launcher/app/src/main/res/values-zh-rCN/strings.xml` |
 | `HomeKeyService.openHome()` 直接启动 `MainActivity`，不再发 `CATEGORY_HOME` 隐式 Intent。FengOS 不把第三方包视为 HOME candidate，原写法会抛 `ActivityNotFoundException` | `launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java` |
 | 默认启用 `stock_home_redirect = com.tvfengmi.launcher`，让 2.7 已有的窗口事件、开机 ProbeActivity 和 Home 键重定向指向本桌面 | `launcher/app/src/main/res/values/config.xml` |
-| 新增机型记录 | `docs/devices/fengmi-fmproja2.md`、`examples/README.md` |
+| **低版本构建开关**：`./gradlew assembleRelease -PlauncherMinSdk=23`。默认仍为 26，低于 26 时自动启用 `coreLibraryDesugaring`（`java.time` 是 API 26，8 个类在用） | `launcher/app/build.gradle` |
+| **API 23 桥接层**：`Compat.java` 收口 23 处 24/26 才有的调用，每处都降级到老版本等价路径；API 26+ 行为不变 | `launcher/app/src/main/java/com/gathin/tvhome/Compat.java` + 6 个调用文件 |
+| **TV framework 缺失降级**：`Compat.tvInputs()` 探测 `TvInputManager` 底层 binder，缺失时返回 null，避免 VIDAA（无 `tv_input`）启动即崩 | `Compat.java`、`MainActivity.java` |
+| 新增机型记录 | `docs/devices/fengmi-fmproja2.md`、`docs/devices/hisense-vidaa-laser.md`、`examples/README.md` |
 | README 中文说明 | `README.zh-CN.md` |
 
 ## 实机验证
+
+### 光峰 Fengmi `FMProjA2`（FengOS / Android 9）
 
 | 项目 | 结果 |
 |---|---|
@@ -24,6 +32,21 @@
 | 开机 | 重启后直接进入 CleanYourTV，不再停在原厂桌面 |
 | Home 键 | 从第三方应用（斗鱼）按 Home，回到 CleanYourTV |
 | 原桌面 | `com.tvfengmi.launcher` **保持启用**，作为恢复入口 |
+
+### 海信 VIDAA 激光电视（Android 6.0 / API 23）
+
+| 项目 | 结果 |
+|---|---|
+| 电视 | 海信 `VIDAA_TV`（`MSD6A838`，MStar），Android 6.0 / SDK 23，`MRA58K` / `01.02.41.04`，1920×1080，`zh-CN` |
+| 原桌面 | 聚好看 `com.jhk.tv.jutv`；`mHomeProcess` 为 `com.jamdeo.tv.vod`，两者都**未停用** |
+| 安装 | 默认 `minSdk 26` 的包返回 `INSTALL_FAILED_OLDER_SDK`；`-PlauncherMinSdk=23` 的包 `Success` |
+| APK | v2.7（versionCode 8），23 构建 698 KB（默认 26 构建仍为 479 KB，CI 体积门不受影响） |
+| 中文 | 界面全中文：问候语、时间日期、Wi-Fi 名、设置入口、应用卡片 |
+| 运行 | 启动后稳定在前台，`logcat` 无崩溃 |
+| Home | 按 Home 弹出系统「选择主屏幕应用」（聚好看 / 主屏幕），点「始终」可固化 |
+| 输入源 | **不可用**：VIDAA 无 TV Input Framework，`Compat.tvInputs()` 降级为空菜单 |
+| 字体 | 低版本回落到系统 `sans-serif`（`res/font` 字体族是 API 26），布局不受影响 |
+| 遥控器 Home | 固件日志 `map KEYCODE_HOME to KEYCODE_F12`，`HomeKeyService` 只覆盖 HOME/ALL_APPS，需实按遥控器确认 |
 
 ## 为什么系统里仍显示原桌面是默认 HOME
 
@@ -106,3 +129,11 @@ adb uninstall com.gathin.tvhome
 2. **FengOS / 光峰适配**：包含 `HomeKeyService.openHome()` 的直接启动修复、`stock_home_redirect` 的可配置方式、`docs/devices/fengmi-fmproja2.md` 和机型表。上游可能希望把 `stock_home_redirect` 留在主题/设备配置里，而不是写死默认值，PR 里应说明这一点。
 
 如果只想要中文、不需要光峰适配，第一个 PR 单独提交即可。
+
+**低版本（API 23）适配不进上游 PR。** 上游 `CONTRIBUTING.md` 把「lower minSdk」明确归到「你自己的仓库」，`PROMPT.md` 也写死「不要降低 minSdk，不要交付别处构建的 APK」。所以这部分留在本 Fork：
+
+- 默认构建仍是 `minSdk 26`，与上游逐字一致，`Compat.java` 在 26+ 上走的都是原来的调用；
+- 只有 `-PlauncherMinSdk=23` 才启用 desugar 和低版本分支，CI 体积门不受影响；
+- 若上游愿意接受，唯一可能被 merge 的是「TV framework 缺失时不要崩」这一处（`Compat.tvInputs()` 的探测），因为它对任何缺 `tv_input` 的机器都是纯健壮性修复。
+
+**海信这台不能出 debloat 清单进 `examples/`**，因为本轮没有停用任何包（聚好看和 `com.jamdeo.tv.vod` 都保持启用），只记录了桌面适配，放在 `docs/devices/`。

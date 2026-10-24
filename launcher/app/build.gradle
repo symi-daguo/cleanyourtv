@@ -2,6 +2,15 @@ plugins {
     id 'com.android.application'
 }
 
+// minSdk is 26 by default, the value upstream ships. -PlauncherMinSdk=23 builds the same source for older
+// sets (Android 6.0, e.g. Hisense VIDAA/Android 6): java.time is API 26, so anything below it needs the
+// desugared library. That library is only added when the override asks for it, which keeps the default
+// release APK under the 480 KB gate in CI.
+def launcherMinSdk = providers.gradleProperty('launcherMinSdk').isPresent()
+        ? providers.gradleProperty('launcherMinSdk').get().toInteger()
+        : 26
+def desugaredJavaTime = launcherMinSdk < 26
+
 android {
     namespace 'com.gathin.tvhome'
     compileSdk 34
@@ -10,6 +19,11 @@ android {
         // Opt-in identity for firmware with a package-name HOME allowlist; see docs/devices/xiaomi-mitv-aetp0-dofus.md.
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.gathin.tvhome')
         minSdk 26
+        // -PlauncherMinSdk replaces the 26 above for older sets (Android 6.0, API 23). A separate
+        // statement, so tests/test_agents_md.py still reads the default from this file.
+        if (launcherMinSdk != 26) {
+            minSdk launcherMinSdk
+        }
         targetSdk 34
         versionCode 8
         versionName '2.7'
@@ -35,6 +49,9 @@ android {
     }
 
     compileOptions {
+        // java.time is API 26. Below it the calls have to go through desugar_jdk_libs, or the launcher
+        // crashes with NoClassDefFoundError on java.time.LocalDate at the first frame.
+        coreLibraryDesugaringEnabled desugaredJavaTime
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -45,4 +62,8 @@ dependencies {
     implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
+    // Only in the low-SDK build: see desugaredJavaTime above.
+    if (desugaredJavaTime) {
+        coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+    }
 }

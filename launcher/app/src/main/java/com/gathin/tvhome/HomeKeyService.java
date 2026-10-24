@@ -11,7 +11,6 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.os.UserManager;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.provider.Settings;
@@ -66,8 +65,7 @@ public class HomeKeyService extends AccessibilityService {
         // The service is directBootAware: Android 11 skips a service that is not while the user is still
         // locked at boot, writes accessibility_enabled=0 and, on TCL G03 firmware, never binds it after the
         // unlock. Config.load reads credential-protected storage, so wait for the unlock before reading it.
-        UserManager users = getSystemService(UserManager.class);
-        if (users.isUserUnlocked()) {
+        if (Compat.isUserUnlocked(this)) {
             loadConfig();
             return;
         }
@@ -80,7 +78,7 @@ public class HomeKeyService extends AccessibilityService {
         };
         registerReceiver(unlockReceiver, new IntentFilter(Intent.ACTION_USER_UNLOCKED));
         // The unlock may have happened between the check and the registration.
-        if (users.isUserUnlocked()) {
+        if (Compat.isUserUnlocked(this)) {
             stopWaitingForUnlock();
             loadConfig();
         }
