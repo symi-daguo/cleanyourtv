@@ -117,7 +117,15 @@ skills/cleanyourtv-cn/scripts/verify.sh 192.168.1.50
 skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 ```
 
-`install.sh` 会自动处理版本差异：Android 8.0 及以上用默认构建（479 KB），Android 6.0–7.1 自动带 `-PlauncherMinSdk=<SDK>` 重新构建（698 KB，多了 `java.time` 的兼容层）。低于 Android 6.0 会直接拒绝，不浪费你的时间。
+`install.sh` **先下载我们编好、验证过的包**，装上就结束 —— 不需要 JDK、不需要 Android SDK、不用等 Gradle 下载依赖。只有下载不到、或者这个包在这台机器上装不上时，才按电视的 Android 版本本地构建再试一次。
+
+| 电视版本 | 下载的包 | 大小 |
+|---|---|---|
+| Android 8.0 及以上 | `cleanyourtv-cn-min26.apk` | 479 KB |
+| Android 6.0 – 7.1 | `cleanyourtv-cn-min23.apk`（多了 `java.time` 的兼容层） | 698 KB |
+| 低于 Android 6.0 | 直接拒绝，不浪费你的时间 | — |
+
+包缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下载。GitHub 直连慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。也可以直接从[最新 release](https://github.com/symi-daguo/cleanyourtv/releases/latest) 手动下载，用 `--apk` 指定。
 
 验证清单共 7 项，只有全部「通过」才算装好：连接、已安装、停在前台、无崩溃、界面中文、默认桌面归属、原桌面仍启用可回退。
 

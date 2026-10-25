@@ -13,12 +13,12 @@ description: 把 CleanYourTV 电视桌面装到 Android TV / Google TV / 国产�
 
 1. **电视和电脑在同一局域网**，电视的「网络调试 / ADB 调试」已打开（通常在 设置 → 关于 → 连点版本号进开发者选项）。
 2. **电视上会弹「允许 USB 调试」**，用遥控器点允许。没点过就会卡在 `unauthorized`。
-3. **电脑上有 adb**（Android SDK Platform-Tools），构建还需要 JDK 17 或 21。
+3. **电脑上有 adb**（Android SDK Platform-Tools）。**不需要 JDK，也不需要 Android SDK** —— 只有走到「本地构建」那一步才需要。
 
 ## 三条命令
 
 ```bash
-# 1. 安装并启动（自动按电视的 Android 版本选构建参数）
+# 1. 安装并启动（先下现成的包，装不上才本地构建）
 skills/cleanyourtv-cn/scripts/install.sh 192.168.1.50
 
 # 2. 逐项验证，给出通过/警告/失败清单
@@ -28,13 +28,26 @@ skills/cleanyourtv-cn/scripts/verify.sh 192.168.1.50
 skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 ```
 
-`install.sh` 会自动做这几件事，不需要人记：
+### install.sh 的顺序（不要倒过来）
 
-| 电视的 SDK | 脚本行为 |
-|---|---|
-| ≥ 26（Android 8.0+） | 用默认构建（`minSdk 26`），APK 479 KB |
-| 23–25（Android 6.0–7.1） | 自动加 `-PlauncherMinSdk=<SDK>`，打开 `coreLibraryDesugaring`，APK 698 KB |
-| < 23 | 直接拒绝，说明这个桌面装不了 |
+**先下载，再考虑构建。** 客户和自己的智能体都不该为了装一个 500 KB 的桌面去装 JDK、拉 Android SDK、等 Gradle 跑几分钟。
+
+| 顺序 | 做什么 | 什么时候往下走 |
+|---|---|---|
+| 1 | 读电视的 SDK，决定要 `min26` 还是 `min23` 包 | — |
+| 2 | 从 release 下载**已经编好、验证过**的 APK，直接装 | 下载失败，或这台机器装不上 |
+| 3 | 本地按这台电视的 SDK 重新构建，再装 | 只有走到这里才需要 JDK 17/21 |
+| 4 | 还是不行就停手，如实说清是哪一类失败 | — |
+
+| 电视的 SDK | 下哪个包 | 对应构建 |
+|---|---|---|
+| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，479 KB | 默认 `minSdk 26` |
+| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，698 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
+| < 23 | 不下载 | 直接拒绝，这个桌面编不出来 |
+
+下载缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下。GitHub 慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。
+
+只有这三种情况会跳过下载、直接构建：加 `--build`、加 `--apk <路径>`、或者电视版本特殊到现成包装不上。**不要为了「保险」默认加 `--build`** —— 那是把客户当成了构建机。
 
 ## 中英文在哪里设置
 
