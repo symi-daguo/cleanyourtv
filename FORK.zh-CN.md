@@ -69,10 +69,23 @@ HOME，而是使用上游 2.7 的 `stock_home_redirect` + `HomeKeyService`：
 
 ## 安装
 
-已构建的 APK（debug 签名，2.7，versionCode 8）：
+**优先用编好的包**（debug 签名，2.7，versionCode 8）。按电视的 Android 版本选一个，装不上再往下看源码构建：
 
-- Release 下载：<https://github.com/symi-daguo/cleanyourtv/releases/tag/v2.7-zh-cn.1>
-- SHA-256：`a078092068dc7d043ba0eac5470b8425cb795562e586ab8faa77bd9f5652813c`
+| 文件 | 适用 | 大小 | SHA-256 |
+|---|---|---|---|
+| `cleanyourtv-cn-min26.apk` | Android 8.0 及以上 | 491,415 字节 | `ef1b91331a8f0248b4627ce02024c5793318d3dc09420a7a801c6be4c5d10b03` |
+| `cleanyourtv-cn-min23.apk` | Android 6.0 – 7.1 | 715,610 字节 | `cf04456357eed0987efbfa2483099466172ae0c9852fd3bb9c77707b564c245a` |
+
+下载地址：<https://github.com/symi-daguo/cleanyourtv/releases/latest>（文件名固定，`latest` 永远指向当前版本）
+
+```bash
+adb connect <电视地址>:5555
+adb install -r cleanyourtv-cn-min23.apk     # 按上表选一个
+```
+
+装错包只会返回 `INSTALL_FAILED_OLDER_SDK`，换另一个即可，不会损坏任何东西。
+
+`skills/cleanyourtv-cn/scripts/install.sh` 会自动判断电视版本、下对应的包、安装并验证，不用手工挑，也不需要 JDK。
 
 也可以从源码构建：
 
