@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import android.view.animation.LinearInterpolator;
+
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -31,6 +33,9 @@ import java.util.concurrent.Executors;
 
 /** Displays and rotates a theme's local wallpaper images while Home is visible. */
 final class WallpaperPlayer {
+    /** Length of one Ken Burns pass, and how much extra zoom it adds on top of the 1.05 the drift needs. */
+    private static final long MOTION_MS = 36000L;
+    private static final float MOTION_ZOOM = 0.12f;
     private final FrameLayout root;
     private final ImageView image;
     private final int backgroundColor;
@@ -40,6 +45,8 @@ final class WallpaperPlayer {
     private final SharedPreferences preferences;
     private final ExecutorService decoder = Executors.newSingleThreadExecutor();
     private final Random random = new Random();
+    /** config.xml wallpaper_motion: slow Ken Burns zoom and drift instead of a still picture. */
+    private final boolean motion;
     private final int width;
     /** config wallpaper_true_color: ARGB_8888 instead of RGB_565. */
     private final Bitmap.Config bitmapConfig;
@@ -88,6 +95,7 @@ final class WallpaperPlayer {
         image = new ImageView(context);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        motion = context.getResources().getBoolean(R.bool.wallpaper_motion);
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
@@ -139,6 +147,7 @@ final class WallpaperPlayer {
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */
     void releaseForMemoryPressure() {
+        image.animate().cancel();
         if (current == null) return;
         image.setImageDrawable(null);
         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
@@ -267,6 +276,45 @@ final class WallpaperPlayer {
         root.setBackground(null);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
+        startMotion();
+    }
+
+    /**
+     * Ken Burns for the picture just shown: 36 seconds of slow zoom with a small drift, from a random
+     * direction so two pictures never travel the same way. The scale never drops below 1.05, which keeps
+     * the drift inside the picture instead of showing an edge.
+     */
+    private void startMotion() {
+        image.animate().cancel();
+        // showFirst() runs while the view is still being attached, and a ViewPropertyAnimator started before the
+        // view has a window never advances. Post it so the pass begins on the next frame, once the picture is up.
+        image.post(this::applyMotion);
+    }
+
+    private void applyMotion() {
+        if (!motion) {
+            image.setScaleX(1f);
+            image.setScaleY(1f);
+            image.setTranslationX(0f);
+            image.setTranslationY(0f);
+            return;
+        }
+        float[] zooms = {1.05f, 1.05f + MOTION_ZOOM};
+        boolean zoomIn = random.nextBoolean();
+        float from = zooms[zoomIn ? 0 : 1];
+        float to = zooms[zoomIn ? 1 : 0];
+        image.setScaleX(from);
+        image.setScaleY(from);
+        image.animate()
+                .scaleX(to).scaleY(to)
+                .translationX((random.nextFloat() - 0.5f) * width * 0.03f)
+                .translationY((random.nextFloat() - 0.5f) * height * 0.03f)
+                .setDuration(MOTION_MS)
+                .setInterpolator(new LinearInterpolator())
+                // Keep going for as long as the picture is up: one pass ends where the next begins, in a new
+                // direction, so the drift never stops mid-photo and never jumps.
+                .withEndAction(this::applyMotion)
+                .start();
     }
 
     private Bitmap decode(File file) {

@@ -409,6 +409,11 @@
          set "tile_opacity" (0 to 100). -->
     <integer name="tile_opacity">100</integer>
 
+    <!-- Ken Burns: slowly zoom and drift the wallpaper so a still photo does not look frozen. Only the view's own
+         transform changes, so the picture stays one copy in memory; the cost is that the background is redrawn
+         every frame while Home is visible. false (the default) leaves the picture still. -->
+    <bool name="wallpaper_motion">false</bool>
+
     <!-- The glow behind the dock in the focused app's colour (red for YouTube, blue for Prime Video). false keeps
          only background_color or the wallpaper behind everything. Can also be set with "ambient_glow": false in a
          theme's config.json. -->
