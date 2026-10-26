@@ -303,6 +303,18 @@ adb shell am start -n com.gathin.tvhome/.MainActivity
 - 1 GB 内存的老电视别开 `wallpaper_true_color`（32 位色，1080p 多占 8 MB）和 `fade_rows`（多占约 6 MB 图形内存），默认值最省。
 - 开机后只在首页可见期间轮换，切到别的应用不会在后台换图。
 
+**卡片和底部快捷栏默认是深色块，会把照片盖住**
+
+默认的深色卡片和 dock 底板是按纯色背景设计的，放到照片上就是一块块黑斑。三个键把它们调淡：
+
+| 键 | 作用 | 建议值 |
+|---|---|---|
+| `tile_opacity` | 应用卡片背景的不透明度，0–100，100 是原来那块实心卡片 | 45 |
+| `dock_opacity` | dock 底板的不透明度，30–100 | 40 |
+| `dock_glass` | dock 换成浅色毛玻璃 | `true` |
+
+只调背景填充，图标和名字仍然完全不透明，不会看不清。`set-wallpaper.sh` 生成配置时默认就带这三个值（`--tile-opacity` / `--dock-opacity` 可改），不用手写。
+
 **少数电视没有可用的外部存储**
 
 主题走的是应用的**外部**文件目录。海信 VIDAA 这类把 `/sdcard` 裁掉的系统上这个目录建不出来，`logcat` 里会看到 `SecurityException: Invalid mkdirs path`，照片推不上去。这类机器只能把背景编译进 APK：图放进 `launcher/app/src/main/res/drawable/`，在 `config.xml` 里指定，重新构建安装。

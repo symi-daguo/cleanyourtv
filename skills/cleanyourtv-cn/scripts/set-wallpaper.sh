@@ -12,6 +12,8 @@ set -euo pipefail
 
 MINUTES=30
 DIM=35
+TILE_OPACITY=45
+DOCK_OPACITY=40
 CAPTIONS=0
 OFF=0
 ARGS=()
@@ -19,6 +21,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --minutes) MINUTES="${2:?--minutes 后面要跟分钟数}"; shift 2 ;;
     --dim) DIM="${2:?--dim 后面要跟 0-90}"; shift 2 ;;
+    --tile-opacity) TILE_OPACITY="${2:?--tile-opacity 后面要跟 0-100}"; shift 2 ;;
+    --dock-opacity) DOCK_OPACITY="${2:?--dock-opacity 后面要跟 30-100}"; shift 2 ;;
     --captions) CAPTIONS=1; shift ;;
     --off) OFF=1; shift ;;
     -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
@@ -125,7 +129,11 @@ say "== 处理完成：$N 张，合计 $(du -sh "$WORK/photos" | awk '{print $1}
   printf '  "wallpaper_rotation_minutes": %s,\n' "$MINUTES"
   printf '  "wallpaper_order": "shuffle",\n'
   printf '  "wallpaper_dim": %s,\n' "$DIM"
-  printf '  "wallpaper_captions": %s\n' "$([ "$CAPTIONS" = 1 ] && echo true || echo false)"
+  printf '  "wallpaper_captions": %s,\n' "$([ "$CAPTIONS" = 1 ] && echo true || echo false)"
+  # 卡片和 dock 默认是不透明的深色块，照片背景会被它们盖住。调淡后图标和名字仍不透明。
+  printf '  "tile_opacity": %s,\n' "$TILE_OPACITY"
+  printf '  "dock_opacity": %s,\n' "$DOCK_OPACITY"
+  printf '  "dock_glass": true\n' 
   printf '}\n'
 } > "$WORK/config.json"
 

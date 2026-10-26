@@ -216,6 +216,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final Map<String, String> appLabels, appBanners;
     /** Every app tile is its icon on a card tinted from that icon, never its banner (config.xml, uniform_tiles). */
     private final boolean uniformTiles;
+    /** Opacity of the card behind a tile, 100 = the solid card (config.xml, tile_opacity). */
+    private final int tileOpacity;
     private final List<Entry> items = new ArrayList<>();
 
     AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
@@ -243,6 +245,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.appLabels = cfg.appLabels;
         this.appBanners = cfg.appBanners;
         this.uniformTiles = cfg.uniformTiles;
+        this.tileOpacity = cfg.tileOpacity;
         // Tiles keep their identity across reload(), so a focused tile stays on its app instead of
         // its view being rebound to whatever app now sits in that slot.
         setHasStableIds(true);
@@ -426,7 +429,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             iconLp.bottomMargin = 0;
             icon.setLayoutParams(iconLp);
         }
-        return new Holder(v, listener, animations, advancedEffects, reducedMotion, restNameAlpha, focusOvershoot);
+        return new Holder(v, listener, animations, advancedEffects, reducedMotion, restNameAlpha, focusOvershoot, tileOpacity);
     }
 
     @Override
@@ -465,7 +468,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         h.card.setBackground(e.banner != null && e.banner.getOpacity() == PixelFormat.OPAQUE ? null : h.cardBackground);
         if (uniformTiles && e.banner == null) {
             if (e.backdrop == null) e.backdrop = backdrop(e.icon, ambientColorAt(position));
-            h.card.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, e.backdrop));
+            GradientDrawable glass = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, e.backdrop);
+            if (tileOpacity < 100) glass.setAlpha(Math.round(255f * tileOpacity / 100f));
+            h.card.setBackground(glass);
         }
         if (e.banner != null) {
             h.banner.setImageDrawable(e.banner);
@@ -865,10 +870,15 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         final boolean overshoot;
 
         Holder(View v, TileListener listener, boolean animations, boolean advancedEffects,
-               boolean reducedMotion, float restNameAlpha, boolean overshoot) {
+               boolean reducedMotion, float restNameAlpha, boolean overshoot, int tileOpacity) {
             super(v);
             card = v.findViewById(R.id.card);
             cardBackground = card.getBackground();
+            // tile_opacity (config.xml): dim only the card's fill so a wallpaper shows through. Done once when the
+            // holder is built, not in bind(): calling setAlpha on every bind stalls key dispatch on the TV.
+            if (tileOpacity < 100 && cardBackground != null) {
+                cardBackground.setAlpha(Math.round(255f * tileOpacity / 100f));
+            }
             banner = v.findViewById(R.id.banner);
             icon = v.findViewById(R.id.icon);
             label = v.findViewById(R.id.label);
