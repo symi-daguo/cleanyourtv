@@ -3,9 +3,9 @@ plugins {
 }
 
 // minSdk is 26 by default, the value upstream ships. -PlauncherMinSdk=23 builds the same source for older
-// sets (Android 6.0, e.g. Hisense VIDAA/Android 6): java.time is API 26, so anything below it needs the
-// desugared library. That library is only added when the override asks for it, which keeps the default
-// release APK under the 480 KB gate in CI.
+// sets (Android 6.0, e.g. Hisense VIDAA): java.time is API 26, so anything below it needs the desugared
+// library. That library is only added when the override asks for it, which keeps the default release APK
+// under the 480 KB gate in CI.
 def launcherMinSdk = providers.gradleProperty('launcherMinSdk').isPresent()
         ? providers.gradleProperty('launcherMinSdk').get().toInteger()
         : 26
@@ -25,8 +25,8 @@ android {
             minSdk launcherMinSdk
         }
         targetSdk 34
-        versionCode 8
-        versionName '2.7'
+        versionCode 9
+        versionName '3.0'
     }
 
     buildTypes {

@@ -41,13 +41,14 @@ final class WallpaperCaptions {
     static Map<String, String> read(File folder) {
         File file = folder == null ? null : new File(folder, FILE_NAME);
         if (file == null || !file.isFile() || file.length() > 256 * 1024) return Collections.emptyMap();
-        // java.nio.file is API 26: read the lines with java.io, which every version has. Still no Android
-        // types, so the JVM tests below keep working.
-        List<String> lines = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-            for (String line = reader.readLine(); line != null; line = reader.readLine()) lines.add(line);
-            return parse(lines);
+        try {
+            // java.nio.file is API 26: read the lines with java.io, which every version has.
+            List<String> lines = new ArrayList<>();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+                for (String line = reader.readLine(); line != null; line = reader.readLine()) lines.add(line);
+                return parse(lines);
+            }
         } catch (Exception e) {
             return Collections.emptyMap();
         }

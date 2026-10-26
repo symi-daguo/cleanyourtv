@@ -1,5 +1,6 @@
 package com.gathin.tvhome;
 
+import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -33,6 +34,13 @@ final class Compat {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true;
         UserManager users = (UserManager) context.getSystemService(Context.USER_SERVICE);
         return users == null || users.isUserUnlocked();
+    }
+
+    /** {@code AccessibilityService#disableSelf}, API 24. Below it there is no way for an enabled service to
+     *  stand itself down, so it stays on: the guard it belongs to is an Android 11 feature and never runs
+     *  that far back anyway. */
+    static void disableSelf(AccessibilityService service) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) service.disableSelf();
     }
 
     /** {@code Configuration#getLocales}, API 24: the single locale field before it. */

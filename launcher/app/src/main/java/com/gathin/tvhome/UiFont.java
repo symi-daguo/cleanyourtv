@@ -19,8 +19,8 @@ final class UiFont {
         res.getValue(fontString, value, true);
         String name = String.valueOf(value.string);
         if (name.startsWith("res/")) {
-            // A res/font family is API 26: below it the family XML cannot be parsed, so keep the system face
-            // rather than the bundled Outfit. The weights collapse into one, and nothing else changes.
+            // A res/font family is API 26: below it the XML cannot be parsed, so keep the system
+            // face rather than the bundled Outfit. The weights collapse into one, nothing else changes.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return res.getFont(value.resourceId);
             return Typeface.create("sans-serif", Typeface.NORMAL);
         }
