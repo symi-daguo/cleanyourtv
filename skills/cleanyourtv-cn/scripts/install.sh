@@ -91,8 +91,8 @@ mkdir -p "$CACHE_DIR"
 # 下载到 .part 再改名：中途断网留半截文件，下次会被当成完整的包用。
 fetch_remote_apk() {
   local dest="$CACHE_DIR/cleanyourtv-cn-$TIER.apk"
-  # 先走 jsdelivr：github.com 和 raw.githubusercontent.com 在国内多数网络里连不上（实测两个都是 000），
-  # cdn.jsdelivr.net 是通的。仓库里 dist/ 下放了同样两个包，就是为了这条通道。
+  # 先走 jsdelivr：实测 github.com 和 raw.githubusercontent.com 都是 TCP 连上后 TLS 握手 10 秒超时，
+  # cdn.jsdelivr.net 是 200。仓库里 dist/ 下放了同样两个包，就是为了这条通道。
   # 都不通时还能用 CLEANYOURTV_APK_URL 指到自己的镜像，或者 --build 本地构建。
   local url="${CLEANYOURTV_APK_URL:-https://cdn.jsdelivr.net/gh/$REPO_SLUG@main/skills/cleanyourtv-cn/dist/cleanyourtv-cn-$TIER.apk}"
   # 缓存七天有效。没有过期判断时，release 换了一版、缓存里还是上一版，脚本会把旧包当"上次下载的"

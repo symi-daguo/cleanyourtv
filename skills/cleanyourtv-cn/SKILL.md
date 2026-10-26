@@ -17,8 +17,21 @@ description: 把 CleanYourTV 电视桌面装到 Android TV / Google TV / 国产�
 https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@main/skills/cleanyourtv-cn/SKILL.md
 ```
 
-用 jsdelivr 而不是 github.com，是因为国内多数网络连不上 GitHub（实测 `github.com` 和
-`raw.githubusercontent.com` 都是 000，`cdn.jsdelivr.net` 是 200）。
+**为什么不是 GitHub 的地址**。在这台机器上实测（2026-10-26）：
+
+| 地址 | 结果 |
+|---|---|
+| `github.com` | TCP 连上，TLS 握手 **10 秒超时** |
+| `raw.githubusercontent.com` | TCP 连上，TLS 握手 **10 秒超时** |
+| `api.github.com` | 200，1.1 秒 |
+| `cdn.jsdelivr.net` | 200，1.9 秒 |
+
+前两个不是 DNS 解析不出来，是 TCP 通了、握手被掐 —— 这类阻断在国内网络上很常见。`api.github.com`
+能通是因为它没被拦，但它是 API 接口，不是给智能体直接读的文件。jsdelivr 是 GitHub 仓库的公共 CDN
+镜像，格式是 `cdn.jsdelivr.net/gh/<用户>/<仓库>@<引用>/<路径>`，内容和仓库完全一致。
+
+所以 `github.com/.../blob/...` 这种网页地址在有代理的机器上也能用，但让客户的智能体去 fetch 时，
+走 raw 或 github.com 都有较大概率失败；jsdelivr 是稳的那条。
 
 配套的东西也在这条通道上：
 
