@@ -233,6 +233,78 @@ TV_HOST=192.168.1.50 tools/theme.sh themes/aurora
 TV_HOST=192.168.1.50 tools/theme.sh --reset
 ```
 
+### 用家里的照片做背景（自动轮播）
+
+桌面背景由主题的 `wallpapers/` 目录提供：放几张照片、设一个间隔，它就会自动换。只保留当前这一张在内存里，换图时在后台线程解码并按屏幕尺寸缩放。
+
+**1. 建目录**
+
+```
+themes/family/
+├── config.json
+└── wallpapers/
+    ├── 001.jpg
+    ├── 002.jpg
+    └── captions.txt     # 可选，给照片起名字
+```
+
+**2. 写 `config.json`**
+
+```json
+{
+  "wallpaper": true,
+  "wallpaper_rotation_minutes": 30,
+  "wallpaper_order": "shuffle",
+  "wallpaper_dim": 35,
+  "wallpaper_captions": true
+}
+```
+
+| 键 | 作用 |
+|---|---|
+| `wallpaper` | 打开背景图。只要单张不轮播，放一个 `wallpaper.jpg` 即可 |
+| `wallpaper_rotation_minutes` | 多少分钟换一张；`0` 是不轮播 |
+| `wallpaper_order` | `shuffle` 随机且不连着重复（默认），`sequential` 按文件名顺序 |
+| `wallpaper_dim` | 压暗百分比 0–90。照片偏亮时调到 35–50，白字才看得清 |
+| `wallpaper_captions` | 在右上角显示照片名，从 `wallpapers/captions.txt` 读 |
+
+**3. 给照片起名（可选）**：`captions.txt` 一行一张，文件名和名字用 Tab 隔开。
+
+```
+001.jpg	三亚海边
+002.jpg	去年冬天
+```
+
+**4. 推上去**
+
+```bash
+TV_HOST=192.168.1.50 tools/theme.sh themes/family
+```
+
+没有 Python 环境时用 adb 直接写同样的目录结构：
+
+```bash
+D=/sdcard/Android/data/com.gathin.tvhome/files
+adb shell mkdir -p $D/wallpapers
+adb push config.json $D/config.json
+adb push wallpapers/*.jpg $D/wallpapers/
+adb shell am force-stop com.gathin.tvhome
+adb shell am start -n com.gathin.tvhome/.MainActivity
+```
+
+**照片怎么准备才不占资源**
+
+- **1920×1080、单张 300 KB 以内**，竖构图先裁成 16:9，免得被居中裁切。
+- 最多 100 张、单张最多 10 MB；超过约 840 万像素的图不显示。
+- 文件名只用字母、数字、下划线、点和短横线。
+- 实测（1280×800 的一台 Android 9 盒子）：开背景比纯色多约 **4.8 MB** 原生内存，轮播本身不再增长。
+- 1 GB 内存的老电视别开 `wallpaper_true_color`（32 位色，1080p 多占 8 MB）和 `fade_rows`（多占约 6 MB 图形内存），默认值最省。
+- 开机后只在首页可见期间轮换，切到别的应用不会在后台换图。
+
+**少数电视没有可用的外部存储**
+
+主题走的是应用的**外部**文件目录。海信 VIDAA 这类把 `/sdcard` 裁掉的系统上这个目录建不出来，`logcat` 里会看到 `SecurityException: Invalid mkdirs path`，照片推不上去。这类机器只能把背景编译进 APK：图放进 `launcher/app/src/main/res/drawable/`，在 `config.xml` 里指定，重新构建安装。
+
 主题格式和可用配置见 [`themes/README.md`](themes/README.md)。
 
 ### 语言、屏保与遥控器
