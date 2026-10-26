@@ -123,8 +123,8 @@ skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 
 | 电视版本 | 下载的包 | 大小 |
 |---|---|---|
-| Android 8.0 及以上 | `cleanyourtv-cn-min26.apk` | 479 KB |
-| Android 6.0 – 7.1 | `cleanyourtv-cn-min23.apk`（多了 `java.time` 的兼容层） | 698 KB |
+| Android 8.0 及以上 | `cleanyourtv-cn-min26.apk` | 517 KB |
+| Android 6.0 – 7.1 | `cleanyourtv-cn-min23.apk`（多了 `java.time` 的兼容层） | 736 KB |
 | 低于 Android 6.0 | 直接拒绝，不浪费你的时间 | — |
 
 包缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下载。GitHub 直连慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。也可以直接从[最新 release](https://github.com/symi-daguo/cleanyourtv/releases/latest) 手动下载，用 `--apk` 指定。

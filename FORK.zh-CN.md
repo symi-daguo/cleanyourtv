@@ -1,6 +1,6 @@
 # CleanYourTV 中文 / 光峰 FengOS / 海信 VIDAA 低版本 Fork
 
-本仓库 fork 自 [Gathin23/cleanyourtv](https://github.com/Gathin23/cleanyourtv)，基于上游 **v2.7**。
+本仓库 fork 自 [Gathin23/cleanyourtv](https://github.com/Gathin23/cleanyourtv)，基于上游 **v3.0**。
 保留上游全部功能和构建方式，增加简体中文补全、光峰/峰米 FengOS 的 Home 键适配，以及
 **Android 6.0（API 23）低版本支持**（海信 VIDAA）。
 
@@ -14,7 +14,7 @@
 | `HomeKeyService.openHome()` 直接启动 `MainActivity`，不再发 `CATEGORY_HOME` 隐式 Intent。FengOS 不把第三方包视为 HOME candidate，原写法会抛 `ActivityNotFoundException` | `launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java` |
 | 默认启用 `stock_home_redirect = com.tvfengmi.launcher`，让 2.7 已有的窗口事件、开机 ProbeActivity 和 Home 键重定向指向本桌面 | `launcher/app/src/main/res/values/config.xml` |
 | **低版本构建开关**：`./gradlew assembleRelease -PlauncherMinSdk=23`。默认仍为 26，低于 26 时自动启用 `coreLibraryDesugaring`（`java.time` 是 API 26，8 个类在用） | `launcher/app/build.gradle` |
-| **API 23 桥接层**：`Compat.java` 收口 23 处 24/26 才有的调用，每处都降级到老版本等价路径；API 26+ 行为不变 | `launcher/app/src/main/java/com/gathin/tvhome/Compat.java` + 6 个调用文件 |
+| **API 23 桥接层**：`Compat.java` 收口 27 处 24/26 才有的调用，每处都降级到老版本等价路径；API 26+ 行为不变 | `launcher/app/src/main/java/com/gathin/tvhome/Compat.java` + 6 个调用文件 |
 | **TV framework 缺失降级**：`Compat.tvInputs()` 探测 `TvInputManager` 底层 binder，缺失时返回 null，避免 VIDAA（无 `tv_input`）启动即崩 | `Compat.java`、`MainActivity.java` |
 | 新增机型记录 | `docs/devices/fengmi-fmproja2.md`、`docs/devices/hisense-vidaa-laser.md`、`examples/README.md` |
 | **中文智能体技能包**：`skills/cleanyourtv-cn/`。`install.sh` 读电视 SDK 自动选构建参数（<26 自动带 `-PlauncherMinSdk`）、`verify.sh` 给 7 项通过/警告/失败清单、`uninstall.sh` 回滚；附按报错对号入座的排查手册 | `skills/cleanyourtv-cn/` |
@@ -69,12 +69,12 @@ HOME，而是使用上游 2.7 的 `stock_home_redirect` + `HomeKeyService`：
 
 ## 安装
 
-**优先用编好的包**（debug 签名，2.7，versionCode 8）。按电视的 Android 版本选一个，装不上再往下看源码构建：
+**优先用编好的包**（debug 签名，3.0，versionCode 9）。按电视的 Android 版本选一个，装不上再往下看源码构建：
 
 | 文件 | 适用 | 大小 | SHA-256 |
 |---|---|---|---|
-| `cleanyourtv-cn-min26.apk` | Android 8.0 及以上 | 491,415 字节 | `ef1b91331a8f0248b4627ce02024c5793318d3dc09420a7a801c6be4c5d10b03` |
-| `cleanyourtv-cn-min23.apk` | Android 6.0 – 7.1 | 715,610 字节 | `cf04456357eed0987efbfa2483099466172ae0c9852fd3bb9c77707b564c245a` |
+| `cleanyourtv-cn-min26.apk` | Android 8.0 及以上 | 530,141 字节 | `bc02886403c18bf21b022c2497afcae61bbe93619f65f56faa4470de54931e0d` |
+| `cleanyourtv-cn-min23.apk` | Android 6.0 – 7.1 | 754,049 字节 | `2d7951e4e2c93cb55d34ef35dc04a00b9d7842e11432c7308fd79aa95fad2344` |
 
 下载地址：<https://github.com/symi-daguo/cleanyourtv/releases/latest>（文件名固定，`latest` 永远指向当前版本）
 

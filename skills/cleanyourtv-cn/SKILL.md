@@ -41,8 +41,8 @@ skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 
 | 电视的 SDK | 下哪个包 | 对应构建 |
 |---|---|---|
-| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，479 KB | 默认 `minSdk 26` |
-| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，698 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
+| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，517 KB | 默认 `minSdk 26` |
+| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，736 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
 | < 23 | 不下载 | 直接拒绝，这个桌面编不出来 |
 
 下载缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下。GitHub 慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。
