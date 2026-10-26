@@ -134,7 +134,9 @@ say "== 处理完成：$N 张，合计 $(du -sh "$WORK/photos" | awk '{print $1}
   # 看着像焦点框卡在第一行。false 让所有图标直接浮在照片上，焦点框才是唯一的框。
   printf '  "dock_band": false,\n'
   # 照片配缓慢的推拉漂移，静态图才不像卡住。只改变换矩阵，不额外占内存。
-  printf '  "wallpaper_motion": true\n' 
+  printf '  "wallpaper_motion": true,\n'
+  # 聚焦应用的彩色光晕会叠在照片上，把整张图染成当前图标的主色。照片背景不要它。
+  printf '  "ambient_glow": false\n' 
   printf '}\n'
 } > "$WORK/config.json"
 
