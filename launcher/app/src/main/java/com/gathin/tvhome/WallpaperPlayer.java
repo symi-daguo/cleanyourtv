@@ -173,11 +173,20 @@ final class WallpaperPlayer {
 
     void start() {
         active = true;
+        // A fade that was interrupted by leaving Home leaves the alpha wherever it stopped - often at 0, which is a
+        // black screen until the next picture arrives. Put it back before anything else.
+        image.animate().cancel();
+        image.setAlpha(1f);
+        if (motion && (motionAnimator == null || !motionAnimator.isRunning())) startMotion();
         update();
     }
 
     void stop() {
         active = false;
+        // Leaving Home parks both animations: a frame loop behind another app is wasted work, and its end state is
+        // what would show through on the way back.
+        image.animate().cancel();
+        if (motionAnimator != null) motionAnimator.cancel();
     }
 
     /** True when a picture is behind the grid. The ambient glow paints the focused app's colour over it, so it goes. */
@@ -325,11 +334,13 @@ final class WallpaperPlayer {
         root.setBackground(null);
         if (motionAnimator != null) motionAnimator.cancel();
         if (old != null && old != bitmap && motion) {
+            // Down to 0.35 rather than 0: fading a picture all the way out puts a black frame between the two, which
+            // is what made the change read as a cut rather than a dissolve.
             image.animate().cancel();
-            image.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+            image.animate().alpha(0.35f).setDuration(220).withEndAction(() -> {
                 image.setImageBitmap(bitmap);
                 image.postDelayed(old::recycle, 600);
-                image.animate().alpha(1f).setDuration(360).withEndAction(this::startMotion).start();
+                image.animate().alpha(1f).setDuration(420).withEndAction(this::startMotion).start();
             }).start();
             return;
         }
