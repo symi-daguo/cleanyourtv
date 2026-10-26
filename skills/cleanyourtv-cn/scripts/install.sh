@@ -104,8 +104,9 @@ fetch_remote_apk() {
   say "== 下载现成包 ${TIER}（不用本地构建，约 $([ "$TIER" = min23 ] && echo 700 || echo 480) KB）"
   say "   ${url}"
   if command -v curl >/dev/null 2>&1; then
-    # 超时给够：直连 GitHub 下 700 KB 有时要半分钟，断线重试两次再放弃。
-    curl -fsSL --connect-timeout 15 --max-time 180 --retry 2 --retry-delay 3 \
+    # 超时给够：jsdelivr 首次回源时，500 KB 的包要 17-28 秒才有响应（实测三次：28.2s / 17.6s / 22.9s），
+    # 连接超时只给 15 秒会直接判失败。断线重试两次再放弃。
+    curl -fsSL --connect-timeout 30 --max-time 180 --retry 2 --retry-delay 3 \
       -o "$dest.part" "$url" || { rm -f "$dest.part"; return 1; }
   elif command -v wget >/dev/null 2>&1; then
     wget -q -T 180 --tries=3 -O "$dest.part" "$url" || { rm -f "$dest.part"; return 1; }
