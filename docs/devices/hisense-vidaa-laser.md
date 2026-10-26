@@ -76,6 +76,29 @@ taking Home down. HDMI switching is not available through this app on this set.
   Choosing `主屏幕` starts CleanYourTV; `始终` has to be picked to make it stick.
 - The stock Home is left enabled throughout.
 
+## Measured
+
+| | |
+|---|---|
+| Cold start (`am start -W`, after `force-stop`) | 4260 ms |
+| PSS, just after start | 20,052 KB |
+| PSS, 35 s idle | 19,256 KB |
+| Breakdown at idle | Java 2,436 / Native 7,996 / Code 8,032 KB |
+
+Compare with the ZTE record: 1077 ms cold start on Android 9. The gap is the board, not the build —
+MSD6A838 is a 2016 MStar part, and the same APK on RK3566 starts four times sooner. Memory goes the
+other way, 19 MB against 27 MB, because the older ART maps less of the app into native memory.
+
+`Code` at 8 MB is the desugared library plus the two dex files being mapped in; on this set `dumpsys`
+counts them there rather than under Native.
+
+### 960x540dp: the fourth row scrolls
+
+1920x1080 at 320dpi is **960x540dp**, the normal figure for a 1080p TV. The app row is a scrollable
+list, so the fourth row sits half off-screen and the scrollbar on the left is the way to it. A
+1280x800dp box (the ZTE record) shows the same row in full. This is the layout behaving as designed,
+not a clipped screen — compare dp, not pixels, before calling it a bug.
+
 ## The Home button reports F12
 
 `input keyevent 3` logs:

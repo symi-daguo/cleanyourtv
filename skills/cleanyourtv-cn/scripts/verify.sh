@@ -109,7 +109,10 @@ else
   if [ -n "$HOME_PROC" ]; then
     ok "Home 归属进程：${HOME_PROC}（原桌面仍在，可随时回去）"
   else
-    warn "这台系统答不出 Home 归属，用遥控器按 Home 眼见为实"
+    # 6.0 只在 Home 进程活着时才打这一行：桌面正占着前台时它是空的，不是故障。
+    # 退一步数一下有多少组件声明了 HOME，至少能确认原桌面的入口没被抹掉。
+    HOMES=$(sh_ 'dumpsys package | grep -c "android.intent.category.HOME"' || true)
+    warn "系统没报 Home 归属（桌面正在前台时属正常；声明 HOME 的条目 ${HOMES:-未知} 处），按 Home 眼见为实"
   fi
 fi
 
