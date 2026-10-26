@@ -47,7 +47,7 @@ final class WallpaperPlayer {
     private final ExecutorService decoder = Executors.newSingleThreadExecutor();
     private final Random random = new Random();
     /** config.xml wallpaper_motion: slow Ken Burns zoom and drift instead of a still picture. */
-    private final boolean motion;
+    private boolean motion;
     /** The running Ken Burns pass, so a picture change can replace it instead of stacking a second one. */
     private ValueAnimator motionAnimator;
     private final int width;
@@ -119,6 +119,11 @@ final class WallpaperPlayer {
                     root.addView(image, 0, new FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                     show(builtin);
+                    // A set in this state cannot be sent config.json, so wallpaper_motion would stay at its default
+                    // for ever. Give it the drift: it is the only picture it will ever have, and the cost measured on
+                    // a 1280x800 box was nil in memory and a redraw per frame while Home is up.
+                    motion = true;
+                    startMotion();
                 }
             }
         }

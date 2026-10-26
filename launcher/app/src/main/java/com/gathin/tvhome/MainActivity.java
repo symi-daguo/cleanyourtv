@@ -573,7 +573,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             public void onChildViewDetachedFromWindow(@NonNull View v) {
             }
         });
-        if (dockRow) grid.addItemDecoration(new DockDecoration(COLUMNS, density, cinematic, cfg.alwaysShowNames, cfg.dockOpacity, cfg.dockGlass, cfg.dockEvenPadding, cfg.dockBand,
+        // The band and its edge are drawn for a flat background. Behind a picture they read as a frame that stays on
+        // the first row while focus moves below it, so a picture wins: no band whenever one is showing. On a set with
+        // no external storage the band's default (true) could never be turned off otherwise, since no config.json
+        // can reach it - which is exactly the black strip a Hisense showed under a photo.
+        boolean bandWanted = cfg.dockBand && !wallpaperPlayer.hasPicture();
+        if (dockRow) grid.addItemDecoration(new DockDecoration(COLUMNS, density, cinematic, cfg.alwaysShowNames, cfg.dockOpacity, cfg.dockGlass, cfg.dockEvenPadding, bandWanted,
                 singleRow, cfg.dockBandAll));
         if (cfg.fadeRows) TopFade.attach(grid, 48 * density);
         // Reduced motion: the tiles are simply there, with no entrance (reloadApps skips it there too).
