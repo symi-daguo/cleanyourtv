@@ -383,9 +383,17 @@ final class Config {
         return GLASS_HALO.equalsIgnoreCase(v) ? GLASS_HALO : GLASS_DEFAULT;
     }
 
-    /** The folder the theme tools push into; null when external storage is unavailable. */
+    /**
+     * The folder the theme tools push into. External storage when it is there; otherwise the app's own
+     * files directory, which is the only thing a set like Hisense's VIDAA leaves usable - its /sdcard is a
+     * symlink to a mount that does not exist, so getExternalFilesDir() answers null and a pushed collection
+     * had nowhere to land. The ThemeProvider writes through this either way, and the adb shell holds
+     * WRITE_SECURE_SETTINGS, so the files can still arrive; they are just inside the app instead of on sdcard.
+     */
     static File dir(Context ctx) {
-        return ctx.getExternalFilesDir(null);
+        File external = ctx.getExternalFilesDir(null);
+        if (external != null) return external;
+        return new File(ctx.getFilesDir(), "theme");
     }
 
     static Config load(Context ctx) {

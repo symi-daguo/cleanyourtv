@@ -106,6 +106,21 @@ final class WallpaperPlayer {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             showFirst();
+        } else if (context.getExternalFilesDir(null) == null) {
+            // No external storage at all (Hisense VIDAA: /sdcard is a symlink to a mount that is not there), so a
+            // pushed collection can never arrive - and neither can a config.json, which is why wallpaper_enabled is
+            // not consulted here: on such a set the switch could never be turned on in the first place. Fall back to
+            // the one picture compiled into the low-SDK build. getIdentifier, not R.drawable, because the default
+            // build does not carry that resource.
+            int id = context.getResources().getIdentifier("builtin_wallpaper", "drawable", context.getPackageName());
+            if (id != 0) {
+                Bitmap builtin = BitmapFactory.decodeResource(context.getResources(), id);
+                if (builtin != null) {
+                    root.addView(image, 0, new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                    show(builtin);
+                }
+            }
         }
     }
 
@@ -146,6 +161,11 @@ final class WallpaperPlayer {
 
     void stop() {
         active = false;
+    }
+
+    /** True when a picture is behind the grid. The ambient glow paints the focused app's colour over it, so it goes. */
+    boolean hasPicture() {
+        return image.getParent() != null;
     }
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */

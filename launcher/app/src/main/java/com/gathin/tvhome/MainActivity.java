@@ -428,7 +428,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         Compat.noOverlappingRendering(ambient);
         ambientGlow = cfg.ambientGlow;
         appGlow = cfg.appGlow;
-        if (!ambientGlow) ambient.setVisibility(View.GONE);
+        // A picture behind the grid would be tinted by the focused app's colour, so the glow goes whenever one is
+        // showing - that is what turned a Golden Gate photo green behind a green icon.
+        if (!ambientGlow || wallpaperPlayer.hasPicture()) ambient.setVisibility(View.GONE);
         heroName = findViewById(R.id.heroName);
         hero = findViewById(R.id.hero);
         // The hero is now a group (name, and the cinematic lines): without this every fade of the default

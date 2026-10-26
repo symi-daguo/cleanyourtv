@@ -48,6 +48,14 @@ android {
         }
     }
 
+    sourceSets {
+        main {
+            // Only the low-SDK build carries the built-in fallback picture: it is for sets whose external storage
+            // is cut away (Hisense VIDAA), and a 1280x720 JPEG in every build would eat into the 576 KB APK gate.
+            if (desugaredJavaTime) res.srcDirs += 'src/min23/res'
+        }
+    }
+
     compileOptions {
         // java.time is API 26. Below it the calls have to go through desugar_jdk_libs, or the launcher
         // crashes with NoClassDefFoundError on java.time.LocalDate at the first frame.
