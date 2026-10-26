@@ -9,6 +9,49 @@ description: 把 CleanYourTV 电视桌面装到 Android TV / Google TV / 国产�
 
 这个包是中文本地化分支的一部分（[symi-daguo/cleanyourtv](https://github.com/symi-daguo/cleanyourtv)），额外支持 **Android 6.0 起的老电视**（上游只支持 Android 8.0+）。
 
+## 发给客户的链接
+
+**把这个地址给客户的智能体**，它读完就能照着做：
+
+```
+https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@main/skills/cleanyourtv-cn/SKILL.md
+```
+
+用 jsdelivr 而不是 github.com，是因为国内多数网络连不上 GitHub（实测 `github.com` 和
+`raw.githubusercontent.com` 都是 000，`cdn.jsdelivr.net` 是 200）。
+
+配套的东西也在这条通道上：
+
+| 要什么 | 地址 |
+|---|---|
+| 本说明 | `.../skills/cleanyourtv-cn/SKILL.md` |
+| 四个脚本 | `.../skills/cleanyourtv-cn/scripts/{install,verify,set-wallpaper,uninstall}.sh` |
+| 现成 APK | `.../skills/cleanyourtv-cn/dist/cleanyourtv-cn-{min26,min23}.apk`（install.sh 自己会下） |
+
+客户只需要装好 adb 并把电视连上，不用 clone 仓库、不用 JDK。脚本会自动下载包；**只有下载和本地构建都失败时**才需要仓库。
+
+### 客户那边卡住时，让他把这些发回来
+
+不要只说"装不上"。按下面抄，一眼就能定位：
+
+```bash
+# 1. 电视是什么
+adb shell getprop ro.product.model
+adb shell getprop ro.build.version.sdk
+adb shell getprop ro.build.version.release
+
+# 2. 连得上吗
+adb devices
+
+# 3. 装的时候报什么
+bash install.sh <电视IP> 2>&1 | tail -30
+
+# 4. 跑起来了吗
+bash verify.sh <电视IP>
+```
+
+四条输出贴过来，基本能判断是连不上、装不上、还是装上了没跑起来。
+
 ## 先确认三件事
 
 1. **电视和电脑在同一局域网**，电视的「网络调试 / ADB 调试」已打开（通常在 设置 → 关于 → 连点版本号进开发者选项）。
