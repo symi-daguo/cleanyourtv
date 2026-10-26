@@ -17,6 +17,16 @@ description: 把 CleanYourTV 电视桌面装到 Android TV / Google TV / 国产�
 https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@main/skills/cleanyourtv-cn/SKILL.md
 ```
 
+它的 GitHub 原地址是（内容完全一致，可自行核对）：
+
+```
+https://github.com/symi-daguo/cleanyourtv/blob/main/skills/cleanyourtv-cn/SKILL.md
+```
+
+**jsdelivr 是什么**：GitHub 仓库的公共 CDN，域名 `cdn.jsdelivr.net`，Vue、Bootstrap 这类开源项目都在用它分发文件。它不托管、不改写内容，只是把公开仓库的文件缓存到各地节点 —— 地址里的 `gh/<用户>/<仓库>@<分支>` 就是"来自 GitHub 的这个仓库"。两串地址打开是同一份文件，客户如果介意域名，让他用上面那串 GitHub 的核对一下即可。
+
+之所以默认给 CDN 那串：GitHub 在国内常被阻断（见下表），客户直接 fetch 会卡住。
+
 **为什么不是 GitHub 的地址**。在这台机器上实测（2026-10-26）：
 
 | 地址 | 结果 |
