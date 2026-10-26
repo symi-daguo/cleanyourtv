@@ -132,7 +132,9 @@ say "== 处理完成：$N 张，合计 $(du -sh "$WORK/photos" | awk '{print $1}
   printf '  "tile_opacity": %s,\n' "$TILE_OPACITY"
   # dock_band 默认 true，会在第一行四个图标外面画一块固定底板和边框。焦点移到下面的行时它不动，
   # 看着像焦点框卡在第一行。false 让所有图标直接浮在照片上，焦点框才是唯一的框。
-  printf '  "dock_band": false\n' 
+  printf '  "dock_band": false,\n'
+  # 照片配缓慢的推拉漂移，静态图才不像卡住。只改变换矩阵，不额外占内存。
+  printf '  "wallpaper_motion": true\n' 
   printf '}\n'
 } > "$WORK/config.json"
 

@@ -215,6 +215,8 @@ final class Config {
     final int cinematicScrim;
     /** Opacity of the card behind an app tile, 0 to 100 percent (config.xml, tile_opacity); 100 is the solid card. */
     final int tileOpacity;
+    /** Slow Ken Burns zoom and drift on a wallpaper (config.xml, wallpaper_motion); false leaves the picture still. */
+    final boolean wallpaperMotion;
     /** A rotating collection's groups by time of day, as file names (config.xml, wallpaper_moods); empty rotates through all of it. */
     final Map<String, Set<String>> wallpaperMoods;
     /** Shape of the glow behind the focused app (config.xml, glow_style): {@link #GLOW_RADIAL} or {@link #GLOW_HORIZON}. */
@@ -262,7 +264,7 @@ final class Config {
                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, boolean appGlow, boolean fadeRows, int homeIdleClockMinutes,
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
-                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, int tileOpacity) {
+                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, int tileOpacity, boolean wallpaperMotion) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -349,6 +351,7 @@ final class Config {
         this.cinematicArt = cinematicArt;
         this.cinematicScrim = cinematicScrim;
         this.tileOpacity = tileOpacity;
+        this.wallpaperMotion = wallpaperMotion;
         this.wallpaperMoods = wallpaperMoods;
         this.gamepadPassthrough = gamepadPassthrough;
         this.consumeVolumeKeys = consumeVolumeKeys;
@@ -466,6 +469,7 @@ final class Config {
         int cinematicArt = res.getInteger(R.integer.cinematic_art);
         int cinematicScrim = res.getInteger(R.integer.cinematic_scrim);
         int tileOpacity = res.getInteger(R.integer.tile_opacity);
+        boolean wallpaperMotion = res.getBoolean(R.bool.wallpaper_motion);
         Map<String, Set<String>> wallpaperMoods = moods(res.getString(R.string.wallpaper_moods));
         String glowStyle = res.getString(R.string.glow_style);
         boolean wifiStatusWarnings = res.getBoolean(R.bool.wifi_status_warnings);
@@ -566,6 +570,7 @@ final class Config {
             cinematicArt = integer(json, "cinematic_art", cinematicArt, 0, 100);
             cinematicScrim = integer(json, "cinematic_scrim", cinematicScrim, 0, 100);
             tileOpacity = integer(json, "tile_opacity", tileOpacity, 0, 100);
+            wallpaperMotion = bool(json, "wallpaper_motion", wallpaperMotion);
             JSONObject moods = json.optJSONObject("wallpaper_moods");
             if (moods != null) wallpaperMoods = moods(moods);
             wifiStatusWarnings = bool(json, "wifi_status_warnings", wifiStatusWarnings);
@@ -640,7 +645,7 @@ final class Config {
                 dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, wallpaperMoods, gamepadPassthrough,
                 consumeVolumeKeys, powerOnHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
-                dateBelowClock, tileOpacity);
+                dateBelowClock, tileOpacity, wallpaperMotion);
     }
 
     /**

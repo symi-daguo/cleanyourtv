@@ -314,6 +314,15 @@ adb shell am start -n com.gathin.tvhome/.MainActivity
 
 `tile_opacity` 只调背景填充，图标和名字仍然完全不透明，不会看不清。`set-wallpaper.sh` 生成配置时默认就带这两个值（`--tile-opacity` 可改），不用手写。
 
+**让静态照片慢慢动起来**
+
+`wallpaper_motion` 打开后，每张照片会做一轮 36 秒的缓慢推拉：从 1.05 倍缩到 1.17 倍，同时带一点点漂移，方向随机，到顶后自动缩回来再放大，如此循环。
+
+它**不额外占内存** —— 只改图片视图自己的变换矩阵，照片在内存里还是那一张。代价是首页可见期间后台每帧重绘一次。实测在 1280×800 的盒子上跑起来 PSS 25.8 MB，和静态时一样。
+
+`set-wallpaper.sh` 默认就带上 `"wallpaper_motion": true`。不想要就在配置里改成 `false`，或者直接删掉这一行（默认关闭）。
+
+
 **少数电视没有可用的外部存储**
 
 主题走的是应用的**外部**文件目录。海信 VIDAA 这类把 `/sdcard` 裁掉的系统上这个目录建不出来，`logcat` 里会看到 `SecurityException: Invalid mkdirs path`，照片推不上去。这类机器只能把背景编译进 APK：图放进 `launcher/app/src/main/res/drawable/`，在 `config.xml` 里指定，重新构建安装。
