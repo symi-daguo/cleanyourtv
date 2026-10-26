@@ -313,12 +313,27 @@ final class WallpaperPlayer {
         return key.toString();
     }
 
-    /** Puts a picture on screen and releases the previous one after a frame has drawn the new one. */
+    /**
+     * Puts a picture on screen and releases the previous one after a frame has drawn the new one. A change of
+     * picture fades through black rather than cutting: a hard swap between two photos reads as a flash. The drift
+     * is stopped for the fade and restarted after it, so the two do not fight over the same view.
+     */
     private void show(Bitmap bitmap) {
         Bitmap old = current;
         current = bitmap;
         // The wallpaper covers the whole root; avoid drawing the fallback colour under it.
         root.setBackground(null);
+        if (motionAnimator != null) motionAnimator.cancel();
+        if (old != null && old != bitmap && motion) {
+            image.animate().cancel();
+            image.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+                image.setImageBitmap(bitmap);
+                image.postDelayed(old::recycle, 600);
+                image.animate().alpha(1f).setDuration(360).withEndAction(this::startMotion).start();
+            }).start();
+            return;
+        }
+        image.setAlpha(1f);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
         startMotion();
