@@ -51,6 +51,19 @@ skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 
 ## 把照片做成会动的桌面背景
 
+### 需要客户提供什么
+
+**只要一个路径** —— 照片放在哪个文件夹。其它都不用问：
+
+```
+客户：照片在 /Users/daguo/Pictures/家庭照片
+你：  ./skills/cleanyourtv-cn/scripts/set-wallpaper.sh /Users/daguo/Pictures/家庭照片 192.168.1.50 --minutes 30
+```
+
+脚本自己会数够不够、裁尺寸、压体积、推上去、重启桌面。要换图就再跑一次同一条命令，它会先清掉旧的那批。
+
+问一句就够：「照片在哪个文件夹？」不要追加分辨率、格式、张数 —— 这些都归脚本管。客户手机里的照片常见是 HEIC，脚本也认。
+
 一条命令，照片目录直接给，剩下的自动做：
 
 ```bash
@@ -134,6 +147,28 @@ adb shell appops set com.gathin.tvhome GET_USAGE_STATS allow
 想切回英文：把 `zh-CN` 换成 `en`（Android 13+），或把系统语言改成 English。
 
 `verify.sh` 的第 5 项就是查这个：SDK ≥ 33 查 per-app 语言，以下查系统语言。
+
+## 开机自启与第一次 Home 选择
+
+**开机自己回到桌面**
+
+桌面有个 `power_on_home` 键：开机后趁没人动遥控器，把前台抢回来。不少电视开机会自己跳到 Live TV 或推荐页，没这个键就得每次手动按一次 Home。`set-wallpaper.sh` 写配置时默认带上。
+
+**第一次按 Home 会弹选择框**
+
+装好后遥控器按 Home，系统会问「用哪个桌面」。这一步只能这样，因为 Android 的默认桌面是系统设置里的东西：
+
+`install.sh` 会在 Android 8.0 及以上尝试 `cmd package set-home-activity`，**但这不保证成功**：有的电视把 `systemui` 或自家桌面注册成 HOME 且 `isDefault=true`，命令返回 `Success`、按 Home 还是回原厂（实测中兴 ZXV10 就是这样）。
+
+所以脚本最后会让你**按一次 Home 键确认**，按结果分三种：
+
+| 现象 | 说明 |
+|---|---|
+| 回到本桌面 | 已生效，完成 |
+| 回到原厂桌面 / 弹选择框 | 在框里选本应用并勾**「始终」**；没有勾选项就去 设置 → 应用 → 默认应用 → 主屏幕 |
+| Android 6.0 – 7.1 | 没有命令行可用，只能走上面第二种 |
+
+没勾「始终」的话，以后每次按 Home 都会问一遍。
 
 ## 「装好了」的标准
 

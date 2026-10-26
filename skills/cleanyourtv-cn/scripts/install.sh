@@ -194,6 +194,18 @@ fi
 
 # --- 启动 ---
 say "== 启动"
+# 尝试设为默认桌面。命令行不是万能的：有的电视把 systemui 或自家桌面注册成 HOME 且 isDefault=true，
+# 这时 set-home-activity 会返回 Success 却按 Home 仍回原厂（实测中兴 ZXV10 就是这样）。所以这里只当
+# 辅助手段，真正的判断交给按一次 Home 键 —— 不承诺成功，也不会因为失败就报错。
+SDK=$("$ADB" -s "$TARGET" shell getprop ro.build.version.sdk | tr -d '\r')
+if [ "${SDK:-0}" -ge 26 ] 2>/dev/null; then
+  "$ADB" -s "$TARGET" shell cmd package set-home-activity --user 0 "$PKG/.MainActivity" >/dev/null 2>&1 || true
+fi
+say "== 请按一次遥控器 Home 键确认"
+say "   回到本桌面：说明已是默认，完成"
+say "   回到原厂桌面或弹出选择框：在框里选 CleanYourTV 并勾「始终」；"
+say "   若没有勾选项，去 设置 → 应用 → 默认应用 → 主屏幕 改"
+
 "$ADB" -s "$TARGET" shell am start -n "$PKG/.MainActivity" >/dev/null || fail "启动失败"
 sleep 3
 FRONT=$("$ADB" -s "$TARGET" shell 'dumpsys activity activities | grep mResumedActivity' | tr -d '\r')
