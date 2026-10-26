@@ -9,6 +9,24 @@ description: 把 CleanYourTV 电视桌面装到 Android TV / Google TV / 国产�
 
 这个包是中文本地化分支的一部分（[symi-daguo/cleanyourtv](https://github.com/symi-daguo/cleanyourtv)），额外支持 **Android 6.0 起的老电视**（上游只支持 Android 8.0+）。
 
+## 直接发给客户的一段话
+
+客户把下面这段连同链接一起转给他的智能体就行，括号里的内容按他家的实际情况改：
+
+```
+请读这个技能说明，然后照它把我家电视的桌面换掉：
+https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@main/skills/cleanyourtv-cn/SKILL.md
+
+电视 IP：192.168.1.50
+（想要照片背景就加一行）照片在：/Users/xxx/Pictures/家庭照片
+
+电脑上已经装好 adb，电视和电脑在同一个 Wi-Fi。
+你需要我动手的地方只有两处：电视弹出「允许调试」时我点允许；装完我按一次 Home 键选「始终」。
+其余你按说明自动完成，做完告诉我结果。
+```
+
+就这么长。不要给客户贴整份 SKILL.md —— 他要转的是这句话，说明文档由智能体自己去读。
+
 ## 发给客户的链接
 
 **把这个地址给客户的智能体**，它读完就能照着做：
