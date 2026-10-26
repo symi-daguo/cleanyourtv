@@ -52,7 +52,7 @@ android {
         main {
             // Only the low-SDK build carries the built-in fallback picture: it is for sets whose external storage
             // is cut away (Hisense VIDAA), and a 1280x720 JPEG in every build would eat into the 576 KB APK gate.
-            if (desugaredJavaTime) res.srcDirs += 'src/min23/res'
+            if (desugaredJavaTime) assets.srcDirs += 'src/min23/assets'
         }
     }
 

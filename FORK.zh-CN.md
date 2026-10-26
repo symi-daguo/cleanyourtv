@@ -14,6 +14,7 @@
 | `HomeKeyService.openHome()` 直接启动 `MainActivity`，不再发 `CATEGORY_HOME` 隐式 Intent。FengOS 不把第三方包视为 HOME candidate，原写法会抛 `ActivityNotFoundException` | `launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java` |
 | 默认启用 `stock_home_redirect = com.tvfengmi.launcher`，让 2.7 已有的窗口事件、开机 ProbeActivity 和 Home 键重定向指向本桌面 | `launcher/app/src/main/res/values/config.xml` |
 | **低版本构建开关**：`./gradlew assembleRelease -PlauncherMinSdk=23`。默认仍为 26，低于 26 时自动启用 `coreLibraryDesugaring`（`java.time` 是 API 26，8 个类在用） | `launcher/app/build.gradle` |
+| **无外部存储的机型**：`Config.dir` 退回应用内部目录；min23 包内自带 5 张图（`src/min23/assets/wallpapers/`），按一分钟轮换并带动态效果，因为这类机器推不了照片也推不了配置 | `Config.java`、`WallpaperPlayer.java`、`launcher/app/src/min23/assets/` |
 | **API 23 桥接层**：`Compat.java` 收口 27 处 24/26 才有的调用，每处都降级到老版本等价路径；API 26+ 行为不变 | `launcher/app/src/main/java/com/gathin/tvhome/Compat.java` + 6 个调用文件 |
 | **TV framework 缺失降级**：`Compat.tvInputs()` 探测 `TvInputManager` 底层 binder，缺失时返回 null，避免 VIDAA（无 `tv_input`）启动即崩 | `Compat.java`、`MainActivity.java` |
 | 新增机型记录 | `docs/devices/fengmi-fmproja2.md`、`docs/devices/hisense-vidaa-laser.md`、`examples/README.md` |

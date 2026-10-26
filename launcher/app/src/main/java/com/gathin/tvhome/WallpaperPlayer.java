@@ -27,6 +27,9 @@ import java.util.Map;
 import android.animation.ValueAnimator;
 import android.view.animation.LinearInterpolator;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -35,8 +38,9 @@ import java.util.concurrent.Executors;
 /** Displays and rotates a theme's local wallpaper images while Home is visible. */
 final class WallpaperPlayer {
     /** Length of one Ken Burns pass, and how much extra zoom it adds on top of the 1.05 the drift needs. */
-    private static final long MOTION_MS = 36000L;
-    private static final float MOTION_ZOOM = 0.12f;
+    private static final long MOTION_MS = 20000L;
+    private static final float MOTION_ZOOM = 0.07f;
+    private final Context context;
     private final FrameLayout root;
     private final ImageView image;
     private final int backgroundColor;
@@ -48,6 +52,10 @@ final class WallpaperPlayer {
     private final Random random = new Random();
     /** config.xml wallpaper_motion: slow Ken Burns zoom and drift instead of a still picture. */
     private boolean motion;
+    /** Pictures bundled in the low-SDK build for a set whose external storage is gone; empty otherwise. */
+    private final List<String> builtinAssets = new ArrayList<>();
+    /** Index of the bundled picture on screen. */
+    private int builtinIndex;
     /** The running Ken Burns pass, so a picture change can replace it instead of stacking a second one. */
     private ValueAnimator motionAnimator;
     private final int width;
@@ -73,6 +81,7 @@ final class WallpaperPlayer {
     private int[] sun;
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
+        this.context = context;
         this.root = root;
         backgroundColor = config.backgroundColor;
         files = new ArrayList<>(config.wallpapers);
@@ -107,23 +116,26 @@ final class WallpaperPlayer {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             showFirst();
         } else if (context.getExternalFilesDir(null) == null) {
-            // No external storage at all (Hisense VIDAA: /sdcard is a symlink to a mount that is not there), so a
-            // pushed collection can never arrive - and neither can a config.json, which is why wallpaper_enabled is
-            // not consulted here: on such a set the switch could never be turned on in the first place. Fall back to
-            // the one picture compiled into the low-SDK build. getIdentifier, not R.drawable, because the default
-            // build does not carry that resource.
-            int id = context.getResources().getIdentifier("builtin_wallpaper", "drawable", context.getPackageName());
-            if (id != 0) {
-                Bitmap builtin = BitmapFactory.decodeResource(context.getResources(), id);
-                if (builtin != null) {
+            // No external storage at all (Hisense VIDAA: /sdcard is a symlink to a mount that is not there), so neither a
+            // pushed collection nor a config.json can arrive. The low-SDK build bundles a few pictures in assets for
+            // exactly this case; they rotate on their own clock, one a minute, and carry the drift by default because
+            // no key can ever be sent to turn it on.
+            try {
+                String[] bundled = context.getAssets().list("wallpapers");
+                if (bundled != null) {
+                    Arrays.sort(bundled);
+                    builtinAssets.addAll(Arrays.asList(bundled));
+                }
+            } catch (IOException ignored) {
+                // An empty list is the same as no fallback: Home keeps its plain colour.
+            }
+            if (!builtinAssets.isEmpty()) {
+                Bitmap first = decodeAsset(builtinAssets.get(0));
+                if (first != null) {
                     root.addView(image, 0, new FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-                    show(builtin);
-                    // A set in this state cannot be sent config.json, so wallpaper_motion would stay at its default
-                    // for ever. Give it the drift: it is the only picture it will ever have, and the cost measured on
-                    // a 1280x800 box was nil in memory and a redraw per frame while Home is up.
                     motion = true;
-                    startMotion();
+                    show(first);
                 }
             }
         }
@@ -204,7 +216,11 @@ final class WallpaperPlayer {
     }
 
     void update() {
-        if (!active || closed || loading || files.isEmpty()) return;
+        if (!active || closed || loading) return;
+        if (files.isEmpty()) {
+            advanceBuiltin();
+            return;
+        }
         String previous = preferences.getString("image", "");
         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.
         List<File> playable = playable();
@@ -326,9 +342,12 @@ final class WallpaperPlayer {
         // One ValueAnimator that never ends, rather than chaining passes by hand: INFINITE + REVERSE zooms in for
         // half the cycle and back out for the other half, so the picture breathes instead of jumping back to 1.0.
         // Starting it needs the view attached, hence the post() - a transform animator begun before that never runs.
-        final float driftX = (random.nextFloat() - 0.5f) * width * 0.04f;
-        final float driftY = (random.nextFloat() - 0.5f) * height * 0.04f;
-        final float zoomTo = 1.05f + MOTION_ZOOM;
+        // Drift, not zoom, is what the eye catches: a pan of five percent across twenty seconds reads as motion,
+        // while the same amount of zoom does not. The zoom stays as a slow breath on top and buys the margin
+        // the pan needs so no edge ever shows.
+        final float driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
+        final float driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
+        final float zoomTo = 1.15f + MOTION_ZOOM;
         image.post(() -> {
             if (!motion) return;
             ValueAnimator a = ValueAnimator.ofFloat(0f, 1f);
@@ -338,7 +357,7 @@ final class WallpaperPlayer {
             a.setInterpolator(new LinearInterpolator());
             a.addUpdateListener(anim -> {
                 float t = (float) anim.getAnimatedValue();
-                float scale = 1.05f + (zoomTo - 1.05f) * t;
+                float scale = 1.15f + (zoomTo - 1.15f) * t;
                 image.setScaleX(scale);
                 image.setScaleY(scale);
                 image.setTranslationX(driftX * (t - 0.5f));
@@ -347,6 +366,28 @@ final class WallpaperPlayer {
             motionAnimator = a;
             a.start();
         });
+    }
+
+    /** Bundled pictures rotate a minute at a time when the set gives us no interval to read. */
+    private static final long BUILTIN_INTERVAL_MS = 60_000L;
+
+    private void advanceBuiltin() {
+        if (builtinAssets.size() < 2) return;
+        long changed = preferences.getLong("changed", 0);
+        if (!WallpaperRotation.due(changed, System.currentTimeMillis(), BUILTIN_INTERVAL_MS)) return;
+        builtinIndex = (builtinIndex + 1) % builtinAssets.size();
+        Bitmap next = decodeAsset(builtinAssets.get(builtinIndex));
+        if (next == null) return;
+        show(next);
+        preferences.edit().putLong("changed", System.currentTimeMillis()).apply();
+    }
+
+    private Bitmap decodeAsset(String name) {
+        try (InputStream in = context.getAssets().open("wallpapers/" + name)) {
+            return BitmapFactory.decodeStream(in);
+        } catch (IOException | OutOfMemoryError unreadable) {
+            return null;
+        }
     }
 
     private Bitmap decode(File file) {
