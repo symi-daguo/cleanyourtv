@@ -6,6 +6,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -174,6 +176,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final boolean dockTitle;
     /** The owner's saved order (reorder button, Order): key -> rank. Empty when there is none or it no longer applies. */
     private Map<String, Integer> savedRanks = Collections.emptyMap();
+    /** Foreground time per package over the last month; empty when the grant is missing, which leaves the
+     *  grid alphabetical exactly as before. */
+    private final Map<String, Long> usage = new HashMap<>();
     /** Dock size recorded with the saved order (Order.docked), or -1: then dock_apps says which tiles are docked. */
     private int savedDocked = -1;
     /** Reorder mode: no empty dock slots, so every position holds a tile that can move. */
@@ -309,6 +314,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 fresh.add(new Entry(label, component, banner, icon));
             }
         }
+        loadUsage();
         Collections.sort(fresh, (a, b) -> {
             // The owner's own order first; tiles it does not know (new installs) follow by the rule below.
             int saved = Order.compare(savedRanks, a.component.flattenToShortString(), b.component.flattenToShortString());
@@ -319,6 +325,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 if (fb < 0) return -1;
                 return Integer.compare(fa, fb);
             }
+            // Then by how much each one is actually used: the family's own habits move the tiles they open first to the
+            // front, without them dragging anything anywhere. Ties and a missing grant both fall through to the label.
+            long ua = usage.getOrDefault(a.pkg, 0L), ub = usage.getOrDefault(b.pkg, 0L);
+            if (ua != ub) return Long.compare(ub, ua);
             // Cards come right after the configured dock apps, before the alphabetical grid.
             boolean ca = a.kind == Entry.CARD, cb = b.kind == Entry.CARD;
             if (ca != cb) return ca ? -1 : 1;
@@ -552,6 +562,25 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     @Override
     public long getItemId(int position) {
         return isLibraryAt(position) ? Long.MIN_VALUE : items.get(position).component.flattenToShortString().hashCode();
+    }
+
+    /**
+     * Fills {@link #usage} with each package's foreground time over the last month, for the grid's ordering. Requires
+     * PACKAGE_USAGE_STATS (a special access the adb shell can grant); without it the query comes back empty and the
+     * grid keeps its alphabetical order. Nothing leaves the device - this only reads what Android already counts.
+     */
+    private void loadUsage() {
+        usage.clear();
+        UsageStatsManager usm = (UsageStatsManager) ctx.getSystemService(Context.USAGE_STATS_SERVICE);
+        if (usm == null) return;
+        long now = System.currentTimeMillis();
+        List<UsageStats> stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, now - 30L * 24 * 3600 * 1000, now);
+        if (stats == null) return;
+        for (UsageStats stat : stats) {
+            if (stat.getTotalTimeInForeground() > 0) {
+                usage.merge(stat.getPackageName(), stat.getTotalTimeInForeground(), Math::max);
+            }
+        }
     }
 
     /** Uses this saved order and dock size from the next reload() (Order.ranks, Order.docked). */

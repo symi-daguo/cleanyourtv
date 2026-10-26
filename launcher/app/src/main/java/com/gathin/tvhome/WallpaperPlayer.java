@@ -56,6 +56,8 @@ final class WallpaperPlayer {
     private final List<String> builtinAssets = new ArrayList<>();
     /** Index of the bundled picture on screen. */
     private int builtinIndex;
+    /** When Home went to the background, so the time spent there does not count towards the rotation. */
+    private long pausedAt;
     /** The running Ken Burns pass, so a picture change can replace it instead of stacking a second one. */
     private ValueAnimator motionAnimator;
     private final int width;
@@ -177,16 +179,31 @@ final class WallpaperPlayer {
         // black screen until the next picture arrives. Put it back before anything else.
         image.animate().cancel();
         image.setAlpha(1f);
-        if (motion && (motionAnimator == null || !motionAnimator.isRunning())) startMotion();
+        // The interval was frozen while Home was in the background, so push the last change forward by however long
+        // that was: the rotation picks up with the same time left on it instead of firing the moment you come back.
+        if (pausedAt > 0) {
+            long parked = System.currentTimeMillis() - pausedAt;
+            long changed = preferences.getLong("changed", 0);
+            if (changed > 0) preferences.edit().putLong("changed", changed + parked).apply();
+            pausedAt = 0;
+        }
+        // Resume the drift where it was parked rather than restarting it: the picture should look like it kept
+        // moving while the family was in another app, not like it jumped back to its first frame.
+        if (motionAnimator != null && motionAnimator.isPaused()) {
+            motionAnimator.resume();
+        } else if (motion && (motionAnimator == null || !motionAnimator.isRunning())) {
+            startMotion();
+        }
         update();
     }
 
     void stop() {
         active = false;
-        // Leaving Home parks both animations: a frame loop behind another app is wasted work, and its end state is
-        // what would show through on the way back.
+        // park() keeps the clock: a paused animator holds its current fraction, so the drift and the rotation both
+        // pick up where they left off instead of starting the interval again from zero.
+        pausedAt = System.currentTimeMillis();
         image.animate().cancel();
-        if (motionAnimator != null) motionAnimator.cancel();
+        if (motionAnimator != null && motionAnimator.isRunning()) motionAnimator.pause();
     }
 
     /** True when a picture is behind the grid. The ambient glow paints the focused app's colour over it, so it goes. */
