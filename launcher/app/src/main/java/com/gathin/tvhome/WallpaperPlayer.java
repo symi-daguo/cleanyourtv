@@ -220,7 +220,6 @@ final class WallpaperPlayer {
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */
     void releaseForMemoryPressure() {
-        image.setLayerType(View.LAYER_TYPE_NONE, null);
         image.animate().cancel();
         if (current == null) return;
         image.setImageDrawable(null);
@@ -395,7 +394,9 @@ final class WallpaperPlayer {
         }
         image.post(() -> {
             if (!motion) return;
-            // Rasterise once; every later frame is a texture transform instead of a full redraw.
+            // Kept: measured 60 fps with the layer and 30 fps without it on this board, so the GL 0x500 noise it
+            // produces is the cheaper of the two problems. Removing it did not clear those errors either (63 in ten
+            // seconds without the layer vs 80 with it), so they come from elsewhere.
             image.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             animateAway();
         });
