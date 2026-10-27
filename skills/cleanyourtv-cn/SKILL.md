@@ -27,6 +27,18 @@ https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@main/skills/cleanyourtv-cn/SK
 
 就这么长。不要给客户贴整份 SKILL.md —— 他要转的是这句话，说明文档由智能体自己去读。
 
+### 如果发现拿到的包不是最新的
+
+jsdelivr 对 `@main` 有缓存，而且对 `.apk` 这种大文件尤其顽固：实测两轮 purge 之后 min26 仍然返回上一版，
+同一时刻用固定 commit 地址去拉就是新的。**遇到"文档说 519 KB、实际下下来大小不对"，用 commit 地址**：
+
+```
+https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@<commit>/skills/cleanyourtv-cn/dist/cleanyourtv-cn-min26.apk
+```
+
+`<commit>` 换成仓库当前的 commit sha（`b0f64bdc6bad` 这一版两个包的校验值是
+`146bd95c…` 和 `a9e8fab3…`）。commit 地址不可变，永远不会命中旧缓存。
+
 ## 发给客户的链接
 
 **把这个地址给客户的智能体**，它读完就能照着做：
