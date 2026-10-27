@@ -186,9 +186,22 @@ final class WallpaperPlayer {
             if (changed > 0) preferences.edit().putLong("changed", changed + parked).apply();
             pausedAt = 0;
         }
-        // The view animator is cancelled in stop(), so it keeps its current transform; starting again continues
-        // from there rather than snapping back to the first frame.
-        if (motion) startMotion();
+        // onTrimMemory drops the picture when Home goes behind another app - opening a heavy one like an ambient-light
+        // controller is enough. Without this the set came back to a bare background colour, because the rotation
+        // still had time left on it and so had no reason to load anything: the drift then ran over an empty view,
+        // which is what looked like the background "no longer being smooth".
+        if (current == null) {
+            if (!files.isEmpty()) {
+                showFirst();
+            } else if (!builtinAssets.isEmpty()) {
+                Bitmap again = decodeAsset(builtinAssets.get(builtinIndex));
+                if (again != null) show(again);
+            }
+        } else if (motion) {
+            // The view animator is cancelled in stop(), so it keeps its current transform; starting again continues
+            // from there rather than snapping back to the first frame.
+            startMotion();
+        }
         update();
     }
 
