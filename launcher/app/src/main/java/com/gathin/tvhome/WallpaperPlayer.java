@@ -1,5 +1,7 @@
 package com.gathin.tvhome;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -57,8 +59,10 @@ final class WallpaperPlayer {
     private int builtinIndex;
     /** When Home went to the background, so the time spent there does not count towards the rotation. */
     private long pausedAt;
-    /** Current drift, re-drawn every cycle so the movement never repeats the same path. */
+    /** Current drift, drawn once per picture so the movement does not repeat between pictures. */
     private float driftX, driftY;
+    /** The running drift; parked with pause() when Home goes behind another app. */
+    private ObjectAnimator motionAnimator;
     private final int width;
     /** config wallpaper_true_color: ARGB_8888 instead of RGB_565. */
     private final Bitmap.Config bitmapConfig;
@@ -198,9 +202,11 @@ final class WallpaperPlayer {
                 if (again != null) show(again);
             }
         } else if (motion) {
-            // The view animator is cancelled in stop(), so it keeps its current transform; starting again continues
-            // from there rather than snapping back to the first frame.
-            startMotion();
+            if (motionAnimator != null && motionAnimator.isPaused()) {
+                motionAnimator.resume();   // continues from the parked fraction, no jump back to the first frame
+            } else {
+                startMotion();
+            }
         }
         update();
     }
@@ -211,6 +217,7 @@ final class WallpaperPlayer {
         // pick up where they left off instead of starting the interval again from zero.
         pausedAt = System.currentTimeMillis();
         image.animate().cancel();
+        if (motionAnimator != null && motionAnimator.isRunning()) motionAnimator.pause();
     }
 
     /** True when a picture is behind the grid. The ambient glow paints the focused app's colour over it, so it goes. */
@@ -383,8 +390,16 @@ final class WallpaperPlayer {
      * on the render thread, so the pan stops competing with the UI thread for the frame: measured 31 fps with a
      * per-frame setScaleX against this panel's 60 Hz, which is what read as stuttering.
      */
+
+    /**
+     * One ObjectAnimator that never stops, instead of animating out and back through withEndAction. Chaining two
+     * ViewPropertyAnimators left a gap of a frame or two between them every twenty seconds, and the linear
+     * interpolation reversed the direction instantly at the turn - together that is the stutter the eye picks up even
+     * at 30 fps. INFINITE + REVERSE with AccelerateDecelerate has no seam and reaches zero velocity at both ends.
+     */
     private void startMotion() {
         image.animate().cancel();
+        if (motionAnimator != null) motionAnimator.cancel();
         if (!motion) {
             image.setScaleX(1f);
             image.setScaleY(1f);
@@ -394,35 +409,28 @@ final class WallpaperPlayer {
         }
         image.post(() -> {
             if (!motion) return;
-            // Kept: measured 60 fps with the layer and 30 fps without it on this board, so the GL 0x500 noise it
-            // produces is the cheaper of the two problems. Removing it did not clear those errors either (63 in ten
-            // seconds without the layer vs 80 with it), so they come from elsewhere.
-            image.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-            animateAway();
+            // Hardware layer tested off: with it the frame timestamps show a ~150 ms hole every nine frames, which
+            // is what reads as a hitch; the bitmap is small enough that a plain redraw keeps up.
+            // A direction per picture, not per leg: re-drawing it mid-run would need a new animator each cycle, and
+            // rebuilding is exactly the seam this change removes.
+            driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
+            driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
+            android.animation.PropertyValuesHolder px =
+                    android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_X, 0f, driftX);
+            android.animation.PropertyValuesHolder py =
+                    android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, driftY);
+            android.animation.PropertyValuesHolder sx =
+                    android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1.15f, 1.15f + MOTION_ZOOM);
+            android.animation.PropertyValuesHolder sy =
+                    android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.15f, 1.15f + MOTION_ZOOM);
+            ObjectAnimator a = ObjectAnimator.ofPropertyValuesHolder(image, px, py, sx, sy);
+            a.setDuration(MOTION_MS);
+            a.setRepeatCount(ValueAnimator.INFINITE);
+            a.setRepeatMode(ValueAnimator.REVERSE);
+            a.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+            motionAnimator = a;
+            a.start();
         });
-    }
-
-    /** Out with a direction drawn fresh each time, so the picture never retraces the same diagonal. */
-    private void animateAway() {
-        if (!motion) return;
-        driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
-        driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
-        animateTo(1.15f + MOTION_ZOOM, driftX, driftY, this::animateHome);
-    }
-
-    private void animateHome() {
-        if (!motion) return;
-        animateTo(1.15f, 0f, 0f, this::animateAway);
-    }
-
-    private void animateTo(float scale, float tx, float ty, Runnable then) {
-        image.animate()
-                .scaleX(scale).scaleY(scale)
-                .translationX(tx).translationY(ty)
-                .setDuration(MOTION_MS)
-                .setInterpolator(new LinearInterpolator())
-                .withEndAction(then)
-                .start();
     }
 
     /** Bundled pictures rotate a minute at a time when the set gives us no interval to read. */
@@ -433,8 +441,7 @@ final class WallpaperPlayer {
         long changed = preferences.getLong("changed", 0);
         if (!WallpaperRotation.due(changed, System.currentTimeMillis(), BUILTIN_INTERVAL_MS)) return;
         // Walk past any picture that will not decode instead of giving up: one bad JPEG used to leave the set showing
-        // the same background for as long as it was on. Every candidate failing keeps the current picture, which is
-        // the only sane fallback left.
+        // the same background for as long as it was on.
         for (int attempt = 0; attempt < builtinAssets.size(); attempt++) {
             builtinIndex = (builtinIndex + 1) % builtinAssets.size();
             Bitmap next = decodeAsset(builtinAssets.get(builtinIndex));
@@ -449,7 +456,6 @@ final class WallpaperPlayer {
     private Bitmap decodeAsset(String name) {
         try (InputStream in = context.getAssets().open("wallpapers/" + name)) {
             BitmapFactory.Options options = new BitmapFactory.Options();
-            // Same rule as the pushed collection: half the bytes unless the theme asked for true colour.
             options.inPreferredConfig = bitmapConfig;
             return BitmapFactory.decodeStream(in, null, options);
         } catch (IOException | OutOfMemoryError unreadable) {
