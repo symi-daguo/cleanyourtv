@@ -18,6 +18,42 @@
 | **壁纸动画走 RenderThread**：`ViewPropertyAnimator` 替代 `ValueAnimator`，海信 maxim 上 31fps → 60fps；硬件层保留（去掉会掉回 30fps），代价是 GL 0x500 日志 | `WallpaperPlayer.java` |
 | **内存回收后重载**：`onTrimMemory` 会清空壁纸，`start()` 检查 `current == null` 后重新解码 | `WallpaperPlayer.java` |
 | **按使用频率排序**：读系统使用统计（需 `appops set ... GET_USAGE_STATS allow`），用得多的排前面，最常用 4 个自动进 dock，无授权时退回字母序 | `AppAdapter.java`、`AndroidManifest.xml` |
+## 跟上上游
+
+```bash
+./tools/fork-sync.sh
+```
+
+只读，不改任何文件。它逐一比对 `launcher/` 下的 Java 文件，分三类报出来：
+
+- **一致**：和上游一样，不用管
+- **落后**：上游加了东西我们没跟（需要手动搬过来）
+- **领先**：我们改的（分两路：够小的提 PR，其余留 Fork）
+- **本地独有**：Fork 特供（当前只有 `Compat.java`）
+
+第一次跑的结果（2026-10-27）：
+
+```
+一致：46 个文件
+落后上游：12 个
+领先上游：4 个
+本地独有：1 个
+```
+
+**落后里最要紧的是 `RemoteKeys.java`，少了 132 行** —— 上游加了遥控器按键处理，我们这版没有。这一块的同步要单独做，因为它和 Fork 的按键映射有交叉，不能整文件覆盖。
+
+领先的四个是 `WallpaperPlayer`（+195，动态壁纸整套）、`WallpaperCaptions`（+10）、`UiFont`（+7）、`MainActivity`。
+
+看单个文件的差异：
+
+```bash
+gh api repos/Gathin23/cleanyourtv/contents/launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java \
+  --jq .content | base64 -d > /tmp/up.java
+diff -u /tmp/up.java launcher/app/src/main/java/com/gathin/tvhome/RemoteKeys.java
+```
+
+**同步节奏**：上游发新版后跑一次这个脚本，先把"落后"的搬过来，再看"领先"有没有该回馈的。别等积了十几个版本再一次性追，那时候 `RemoteKeys` 这类文件会彻底对不上。
+
 | **API 23 桥接层**：`Compat.java` 收口 27 处 24/26 才有的调用，每处都降级到老版本等价路径；API 26+ 行为不变 | `launcher/app/src/main/java/com/gathin/tvhome/Compat.java` + 6 个调用文件 |
 | **TV framework 缺失降级**：`Compat.tvInputs()` 探测 `TvInputManager` 底层 binder，缺失时返回 null，避免 VIDAA（无 `tv_input`）启动即崩 | `Compat.java`、`MainActivity.java` |
 | 新增机型记录 | `docs/devices/fengmi-fmproja2.md`、`docs/devices/hisense-vidaa-laser.md`、`examples/README.md` |
