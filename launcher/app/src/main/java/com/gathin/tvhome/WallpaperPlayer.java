@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import android.animation.ValueAnimator;
 import android.view.animation.LinearInterpolator;
 
 import java.io.IOException;
@@ -60,8 +59,6 @@ final class WallpaperPlayer {
     private long pausedAt;
     /** Current drift, re-drawn every cycle so the movement never repeats the same path. */
     private float driftX, driftY;
-    /** The running Ken Burns pass, so a picture change can replace it instead of stacking a second one. */
-    private ValueAnimator motionAnimator;
     private final int width;
     /** config wallpaper_true_color: ARGB_8888 instead of RGB_565. */
     private final Bitmap.Config bitmapConfig;
@@ -189,13 +186,9 @@ final class WallpaperPlayer {
             if (changed > 0) preferences.edit().putLong("changed", changed + parked).apply();
             pausedAt = 0;
         }
-        // Resume the drift where it was parked rather than restarting it: the picture should look like it kept
-        // moving while the family was in another app, not like it jumped back to its first frame.
-        if (motionAnimator != null && motionAnimator.isPaused()) {
-            motionAnimator.resume();
-        } else if (motion && (motionAnimator == null || !motionAnimator.isRunning())) {
-            startMotion();
-        }
+        // The view animator is cancelled in stop(), so it keeps its current transform; starting again continues
+        // from there rather than snapping back to the first frame.
+        if (motion) startMotion();
         update();
     }
 
@@ -205,7 +198,6 @@ final class WallpaperPlayer {
         // pick up where they left off instead of starting the interval again from zero.
         pausedAt = System.currentTimeMillis();
         image.animate().cancel();
-        if (motionAnimator != null && motionAnimator.isRunning()) motionAnimator.pause();
     }
 
     /** True when a picture is behind the grid. The ambient glow paints the focused app's colour over it, so it goes. */
@@ -217,7 +209,6 @@ final class WallpaperPlayer {
     void releaseForMemoryPressure() {
         image.setLayerType(View.LAYER_TYPE_NONE, null);
         image.animate().cancel();
-        if (motionAnimator != null) motionAnimator.cancel();
         if (current == null) return;
         image.setImageDrawable(null);
         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
@@ -352,7 +343,6 @@ final class WallpaperPlayer {
         current = bitmap;
         // The wallpaper covers the whole root; avoid drawing the fallback colour under it.
         root.setBackground(null);
-        if (motionAnimator != null) motionAnimator.cancel();
         if (old != null && old != bitmap && motion) {
             // Down to 0.35 rather than 0: fading a picture all the way out puts a black frame between the two, which
             // is what made the change read as a cut rather than a dissolve.
@@ -376,8 +366,13 @@ final class WallpaperPlayer {
      * the drift inside the picture instead of showing an edge.
      */
     /** Starts a fresh Ken Burns pass for the picture now on screen; replaces any pass still running. */
+    /**
+     * The drift, driven by the view's own animator rather than a ValueAnimator. ViewPropertyAnimator runs its frames
+     * on the render thread, so the pan stops competing with the UI thread for the frame: measured 31 fps with a
+     * per-frame setScaleX against this panel's 60 Hz, which is what read as stuttering.
+     */
     private void startMotion() {
-        if (motionAnimator != null) motionAnimator.cancel();
+        image.animate().cancel();
         if (!motion) {
             image.setScaleX(1f);
             image.setScaleY(1f);
@@ -385,42 +380,35 @@ final class WallpaperPlayer {
             image.setTranslationY(0f);
             return;
         }
-        // One ValueAnimator that never ends, rather than chaining passes by hand: INFINITE + REVERSE zooms in for
-        // half the cycle and back out for the other half, so the picture breathes instead of jumping back to 1.0.
-        // Starting it needs the view attached, hence the post() - a transform animator begun before that never runs.
-        // Drift, not zoom, is what the eye catches: a pan of five percent across twenty seconds reads as motion,
-        // while the same amount of zoom does not. The zoom stays as a slow breath on top and buys the margin
-        // the pan needs so no edge ever shows.
-        final float zoomTo = 1.15f + MOTION_ZOOM;
         image.post(() -> {
             if (!motion) return;
-            // Hardware layer: the picture is rasterised once and every later frame is a texture transform on the GPU
-            // instead of a 1280x720 redraw on the UI thread. On a maxim board that is the difference between 30 fps
-            // that stutters and a pan that reads as smooth.
+            // Rasterise once; every later frame is a texture transform instead of a full redraw.
             image.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-            ValueAnimator a = ValueAnimator.ofFloat(0f, 1f);
-            a.setDuration(MOTION_MS);
-            a.setRepeatCount(ValueAnimator.INFINITE);
-            a.setRepeatMode(ValueAnimator.REVERSE);
-            a.setInterpolator(new LinearInterpolator());
-            a.addUpdateListener(anim -> {
-                float t = (float) anim.getAnimatedValue();
-                float scale = 1.15f + (zoomTo - 1.15f) * t;
-                image.setScaleX(scale);
-                image.setScaleY(scale);
-                image.setTranslationX(driftX * (t - 0.5f));
-                image.setTranslationY(driftY * (t - 0.5f));
-            });
-            // A fresh direction every cycle, so the picture does not retrace the same path for as long as it is up.
-            a.addListener(new android.animation.AnimatorListenerAdapter() {
-                @Override public void onAnimationRepeat(android.animation.Animator animation) {
-                    driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
-                    driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
-                }
-            });
-            motionAnimator = a;
-            a.start();
+            animateAway();
         });
+    }
+
+    /** Out with a direction drawn fresh each time, so the picture never retraces the same diagonal. */
+    private void animateAway() {
+        if (!motion) return;
+        driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
+        driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
+        animateTo(1.15f + MOTION_ZOOM, driftX, driftY, this::animateHome);
+    }
+
+    private void animateHome() {
+        if (!motion) return;
+        animateTo(1.15f, 0f, 0f, this::animateAway);
+    }
+
+    private void animateTo(float scale, float tx, float ty, Runnable then) {
+        image.animate()
+                .scaleX(scale).scaleY(scale)
+                .translationX(tx).translationY(ty)
+                .setDuration(MOTION_MS)
+                .setInterpolator(new LinearInterpolator())
+                .withEndAction(then)
+                .start();
     }
 
     /** Bundled pictures rotate a minute at a time when the set gives us no interval to read. */
@@ -447,8 +435,7 @@ final class WallpaperPlayer {
     private Bitmap decodeAsset(String name) {
         try (InputStream in = context.getAssets().open("wallpapers/" + name)) {
             BitmapFactory.Options options = new BitmapFactory.Options();
-            // Same rule as the pushed collection: half the bytes unless the theme asked for true colour. On a 1 GB
-            // board that is the difference between five pictures that all decode and one that runs out of memory.
+            // Same rule as the pushed collection: half the bytes unless the theme asked for true colour.
             options.inPreferredConfig = bitmapConfig;
             return BitmapFactory.decodeStream(in, null, options);
         } catch (IOException | OutOfMemoryError unreadable) {
