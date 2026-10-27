@@ -58,6 +58,8 @@ final class WallpaperPlayer {
     private int builtinIndex;
     /** When Home went to the background, so the time spent there does not count towards the rotation. */
     private long pausedAt;
+    /** Current drift, re-drawn every cycle so the movement never repeats the same path. */
+    private float driftX, driftY;
     /** The running Ken Burns pass, so a picture change can replace it instead of stacking a second one. */
     private ValueAnimator motionAnimator;
     private final int width;
@@ -213,6 +215,7 @@ final class WallpaperPlayer {
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */
     void releaseForMemoryPressure() {
+        image.setLayerType(View.LAYER_TYPE_NONE, null);
         image.animate().cancel();
         if (motionAnimator != null) motionAnimator.cancel();
         if (current == null) return;
@@ -388,11 +391,13 @@ final class WallpaperPlayer {
         // Drift, not zoom, is what the eye catches: a pan of five percent across twenty seconds reads as motion,
         // while the same amount of zoom does not. The zoom stays as a slow breath on top and buys the margin
         // the pan needs so no edge ever shows.
-        final float driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
-        final float driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
         final float zoomTo = 1.15f + MOTION_ZOOM;
         image.post(() -> {
             if (!motion) return;
+            // Hardware layer: the picture is rasterised once and every later frame is a texture transform on the GPU
+            // instead of a 1280x720 redraw on the UI thread. On a maxim board that is the difference between 30 fps
+            // that stutters and a pan that reads as smooth.
+            image.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             ValueAnimator a = ValueAnimator.ofFloat(0f, 1f);
             a.setDuration(MOTION_MS);
             a.setRepeatCount(ValueAnimator.INFINITE);
@@ -406,6 +411,13 @@ final class WallpaperPlayer {
                 image.setTranslationX(driftX * (t - 0.5f));
                 image.setTranslationY(driftY * (t - 0.5f));
             });
+            // A fresh direction every cycle, so the picture does not retrace the same path for as long as it is up.
+            a.addListener(new android.animation.AnimatorListenerAdapter() {
+                @Override public void onAnimationRepeat(android.animation.Animator animation) {
+                    driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
+                    driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
+                }
+            });
             motionAnimator = a;
             a.start();
         });
@@ -418,16 +430,27 @@ final class WallpaperPlayer {
         if (builtinAssets.size() < 2) return;
         long changed = preferences.getLong("changed", 0);
         if (!WallpaperRotation.due(changed, System.currentTimeMillis(), BUILTIN_INTERVAL_MS)) return;
-        builtinIndex = (builtinIndex + 1) % builtinAssets.size();
-        Bitmap next = decodeAsset(builtinAssets.get(builtinIndex));
-        if (next == null) return;
-        show(next);
-        preferences.edit().putLong("changed", System.currentTimeMillis()).apply();
+        // Walk past any picture that will not decode instead of giving up: one bad JPEG used to leave the set showing
+        // the same background for as long as it was on. Every candidate failing keeps the current picture, which is
+        // the only sane fallback left.
+        for (int attempt = 0; attempt < builtinAssets.size(); attempt++) {
+            builtinIndex = (builtinIndex + 1) % builtinAssets.size();
+            Bitmap next = decodeAsset(builtinAssets.get(builtinIndex));
+            if (next != null) {
+                show(next);
+                preferences.edit().putLong("changed", System.currentTimeMillis()).apply();
+                return;
+            }
+        }
     }
 
     private Bitmap decodeAsset(String name) {
         try (InputStream in = context.getAssets().open("wallpapers/" + name)) {
-            return BitmapFactory.decodeStream(in);
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            // Same rule as the pushed collection: half the bytes unless the theme asked for true colour. On a 1 GB
+            // board that is the difference between five pictures that all decode and one that runs out of memory.
+            options.inPreferredConfig = bitmapConfig;
+            return BitmapFactory.decodeStream(in, null, options);
         } catch (IOException | OutOfMemoryError unreadable) {
             return null;
         }
