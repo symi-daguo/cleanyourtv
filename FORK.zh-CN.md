@@ -40,7 +40,9 @@
 本地独有：1 个
 ```
 
-**落后里最要紧的是 `RemoteKeys.java`，少了 132 行** —— 上游加了遥控器按键处理，我们这版没有。这一块的同步要单独做，因为它和 Fork 的按键映射有交叉，不能整文件覆盖。
+**`RemoteKeys.java` 少的 132 行，核对过了：不用同步。** 逐行 diff 的结果是 135 行新增、15 行改写，新增的全是上游的按键增强（`front:` 前缀、「已在前台时行为不同」、`hold:` 长按、`guide:<package>`、`back/home/recents/mute/sleep/settings/wifi` 动作词、`package/.Activity` 直开），改写的是把 `holdEntries()` 这类私有方法抽象成通用的 `prefixed()`。**没有一处 bug 修复。**
+
+我们的基础映射（`input_key_keycodes` / `app_keys`）是完整可用的，把这些搬过来反而会和 Fork 自己的按键处理交叉。**结论：留着不动，但仍然要留在这个列表里当已知差异。**
 
 领先的四个是 `WallpaperPlayer`（+195，动态壁纸整套）、`WallpaperCaptions`（+10）、`UiFont`（+7）、`MainActivity`。
 
