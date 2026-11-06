@@ -101,7 +101,7 @@ fetch_remote_apk() {
     say "== 用上次下载的包：${dest}（超过七天会重新下载）"
     return 0
   fi
-  say "== 下载现成包 ${TIER}（不用本地构建，约 $([ "$TIER" = min23 ] && echo 700 || echo 480) KB）"
+  say "== 下载现成包 ${TIER}（不用本地构建，约 $([ "$TIER" = min23 ] && echo 1008 || echo 576) KB）"
   say "   ${url}"
   if command -v curl >/dev/null 2>&1; then
     # 超时给够：jsdelivr 首次回源时，500 KB 的包要 17-28 秒才有响应（实测三次：28.2s / 17.6s / 22.9s），

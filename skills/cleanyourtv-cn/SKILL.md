@@ -105,6 +105,20 @@ bash verify.sh <电视IP>
 
 四条输出贴过来，基本能判断是连不上、装不上、还是装上了没跑起来。
 
+## 版本基线
+
+基于上游 **v3.4.0**（`versionCode 13` / `versionName 3.4`）重建，保留了官方仍然没有的部分：
+
+| 本分支提供 | 原因 |
+|---|---|
+| `-PlauncherMinSdk=23` 的 Android 6.0 包 | 官方最低 Android 8.0 |
+| 包内 5 张背景图（`src/min23/assets`） | 外部存储被裁掉的机器推不进照片 |
+| `wallpaper_motion` 动态背景 | 官方没有 |
+| `tile_opacity` 卡片半透明 | 官方没有 |
+| 按使用频率排序 | 官方没有 |
+
+官方已经有的（`dock_band`、`ambient_glow`、`power_on_home`、换图间隔容差、v3.4 新增的 15 个键）一律用官方的。
+
 ## 先确认三件事
 
 1. **电视和电脑在同一局域网**，电视的「网络调试 / ADB 调试」已打开（通常在 设置 → 关于 → 连点版本号进开发者选项）。
@@ -137,13 +151,23 @@ skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 
 | 电视的 SDK | 下哪个包 | 对应构建 |
 |---|---|---|
-| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，519 KB | 默认 `minSdk 26` |
-| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，1159 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
+| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，576 KB | 默认 `minSdk 26` |
+| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，1008 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
 | < 23 | 不下载 | 直接拒绝，这个桌面编不出来 |
 
 下载缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下。GitHub 慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。
 
 只有这三种情况会跳过下载、直接构建：加 `--build`、加 `--apk <路径>`、或者电视版本特殊到现成包装不上。**不要为了「保险」默认加 `--build`** —— 那是把客户当成了构建机。
+
+## 录制演示素材
+
+`demo-material/` 里有一份现成的说明和脚本（**不进代码仓库**，仓库根目录的 `.gitignore` 已排除）：
+
+```bash
+demo-material/record-demo.sh <电视IP>
+```
+
+它会装最新的包、授权使用统计、截 4 张图、录 30 秒桌面动态，并打印帧时间和内存。
 
 ## 把照片做成会动的桌面背景
 
