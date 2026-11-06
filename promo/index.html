@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<title>净屏 CleanYourTV 中文版 · 88s</title>
+<style>
+html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10;
+  font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif;color:#fff;
+  -webkit-font-smoothing:antialiased}
+
+/* 全局底：不是纯黑。顶部一层冷调径向渐变 + 极淡网格 + 噪点。
+   纯 #000 大平面在电视上看会「发干」（用户原话）。*/
+.stage{position:relative;width:1920px;height:1080px;overflow:hidden;
+  background:radial-gradient(1200px 720px at 50% -10%, #1a202b 0%, #10141b 42%, #0a0c10 100%)}
+.stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+  background-size:80px 80px}
+.stage::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  opacity:.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+.scene{position:absolute;inset:0;opacity:0;z-index:2}
+/* 统一内容边距：左右 200，上下 110 —— 1920 下留白 10%，不贴边 */
+.pad{position:absolute;inset:0;padding:110px 200px}
+
+.k{font:600 15px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.24em;
+  text-transform:uppercase;color:#7f8896}
+.h1{font-size:104px;font-weight:700;line-height:1.05;letter-spacing:-.025em}
+.h2{font-size:60px;font-weight:700;line-height:1.15;letter-spacing:-.015em}
+.sub{font-size:27px;line-height:1.62;color:#9ba4b2}
+.num{font:700 100px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:-.03em}
+.unit{font-size:30px;font-weight:600;color:#7f8896;margin-left:6px}
+
+/* 左侧竖线：给大平面一个结构，避免「空」 */
+.rule{position:absolute;left:120px;top:110px;bottom:110px;width:2px;z-index:1;
+  background:linear-gradient(180deg,#5ddb8a 0%,#2a3240 34%,#171c24 100%)}
+
+/* ── s1 钩子 ── */
+#s1 .pad{display:grid;align-content:center;padding-left:200px}
+#s1 .h1{font-size:118px;max-width:1420px}
+#s1 .hi{color:#5ddb8a}
+
+/* ── s2 对比 ── */
+#s2 .pad{display:grid;grid-template-columns:500px 1fr;gap:72px;align-items:center;
+  padding:110px 200px}
+#s2 .badlist{display:flex;flex-direction:column;gap:22px}
+#s2 .badlist .it{display:flex;align-items:center;gap:16px;font-size:30px;color:#9aa3b1}
+#s2 .badlist .it i{font-style:normal;font-size:24px;color:#c2503f;font-weight:700;
+  flex:0 0 auto;line-height:1}
+#s2 .shot{border:1px solid #2a3240;border-radius:14px;overflow:hidden;
+  box-shadow:0 34px 80px rgba(0,0,0,.62)}
+#s2 .shot img{width:100%;display:block}
+#s2 .cap{margin-top:16px;font-size:22px;color:#7f8896;letter-spacing:.02em}
+
+/* ── s3 是什么 ── */
+#s3 .pad{display:grid;grid-template-columns:1fr 660px;gap:64px;align-items:center}
+#s3 .shot{border:1px solid #2a3240;border-radius:16px;overflow:hidden;
+  box-shadow:0 40px 90px rgba(0,0,0,.6);transform-origin:52% 50%}
+#s3 .shot img{width:100%;display:block}
+#s3 .figs{display:flex;flex-direction:column;gap:24px}
+#s3 .fig{display:flex;align-items:baseline;gap:14px}
+#s3 .fig b{font:700 60px/1 ui-monospace,Menlo,monospace;letter-spacing:-.03em;color:#fff}
+#s3 .fig span{font-size:22px;color:#8b93a1}
+
+/* ── s4 Android 6 ── */
+#s4 .pad{display:grid;align-content:center;justify-items:start;gap:46px}
+#s4 .cards{display:grid;grid-template-columns:1fr 1fr;gap:34px;max-width:1520px}
+#s4 .card{border:1px solid #242b36;border-radius:16px;padding:36px 40px;background:#11151c}
+#s4 .card.win{border-color:#2f6a4a;background:#0f1a15}
+#s4 .card .vh{display:flex;align-items:center;justify-content:space-between;margin:14px 0}
+#s4 .card .ver{font:700 68px/1 ui-monospace,Menlo,monospace;letter-spacing:-.02em}
+#s4 .card.off .ver{color:#4b5563}
+#s4 .card.win .ver{color:#5ddb8a}
+#s4 .card .mk{font-size:32px;font-weight:700}
+#s4 .card.off .mk{color:#4b5563}
+#s4 .card.win .mk{color:#5ddb8a}
+#s4 .card p{margin:0;font-size:23px;line-height:1.6;color:#98a1b0}
+#s4 .note{font-size:23px;color:#6f7887;max-width:1460px;line-height:1.62}
+#s4 .note b{color:#a9b3c1;font-weight:600}
+
+/* ── s5 动态壁纸 ── */
+#s5 video{position:absolute;inset:0;width:1920px;height:1080px;object-fit:cover}
+#s5 .fr{position:absolute;inset:52px;border:1.5px solid rgba(255,255,255,.14);border-radius:16px}
+#s5 .hud{position:absolute;left:200px;bottom:150px;z-index:3;
+  background:rgba(8,10,14,.78);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:24px 32px;
+  display:flex;align-items:center;gap:20px}
+#s5 .hud .dot{width:9px;height:9px;border-radius:50%;background:#5ddb8a;
+  box-shadow:0 0 14px #5ddb8a}
+#s5 .hud .t{font-size:29px;font-weight:600}
+#s5 .hud .s{font-size:21px;color:#9aa3b1;padding-left:18px;
+  border-left:1px solid rgba(255,255,255,.14)}
+
+/* ── s6 半透明 + 换图时间线 ── */
+#s6 .pad{display:grid;grid-template-columns:1fr 620px;gap:64px;align-items:center}
+#s6 .shot{border:1px solid #2a3240;border-radius:16px;overflow:hidden;
+  box-shadow:0 34px 80px rgba(0,0,0,.6)}
+#s6 .shot img{width:100%;display:block}
+#s6 .tl{margin-top:32px}
+#s6 .tl .bar{height:10px;border-radius:6px;overflow:hidden;display:flex;background:#1a1f28}
+#s6 .tl .bar i{display:block;height:100%}
+#s6 .tl .lb{display:flex;justify-content:space-between;margin-top:12px;
+  font:500 19px/1 ui-monospace,Menlo,monospace;color:#78818f}
+
+/* ── s7 频率排序 ── */
+#s7 .pad{display:grid;grid-template-columns:1fr 600px;gap:64px;align-items:center}
+#s7 .shot{border:1px solid #2a3240;border-radius:16px;overflow:hidden;
+  box-shadow:0 34px 80px rgba(0,0,0,.6)}
+#s7 .shot img{width:100%;display:block}
+#s7 .freq{display:flex;flex-direction:column;gap:16px;margin-top:30px}
+#s7 .fl{display:grid;grid-template-columns:170px 1fr 56px;gap:16px;align-items:center;
+  font-size:22px;color:#a2abba}
+#s7 .fl .tr{height:9px;border-radius:5px;background:#1a1f28;overflow:hidden}
+#s7 .fl .tr i{display:block;height:100%;background:#5ddb8a;border-radius:5px}
+#s7 .fl .n{font:600 19px/1 ui-monospace,Menlo,monospace;color:#7f8896;text-align:right}
+
+/* ── s8 数据 ── */
+#s8 .pad{display:grid;align-content:center;justify-items:start;gap:46px}
+#s8 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:30px;max-width:1520px}
+#s8 .cell{border-left:3px solid #232a35;padding-left:24px}
+#s8 .cell .num{font-size:84px}
+#s8 .cell .cap{margin-top:12px;font-size:21px;color:#8b93a1;line-height:1.5}
+#s8 .wave .row{display:flex;gap:4px;align-items:flex-end;height:52px;max-width:1520px}
+#s8 .wave .row i{flex:1;background:#3d4757;border-radius:2px}
+#s8 .wave .row i.gap{background:#c2503f}
+#s8 .wave .lb{display:flex;justify-content:space-between;margin-top:10px;max-width:1520px;
+  font:500 18px/1 ui-monospace,Menlo,monospace;color:#6f7887}
+
+/* ── s9 坦白 ── */
+#s9 .pad{display:grid;align-content:center;justify-items:start;gap:32px}
+#s9 blockquote{margin:0;font-size:38px;line-height:1.62;color:#c3cbd6;max-width:1500px;
+  border-left:3px solid #c2503f;padding-left:34px}
+#s9 blockquote b{color:#fff;font-weight:600}
+#s9 .small{font-size:23px;color:#79828f;max-width:1300px;line-height:1.6}
+#s9 .small b{color:#c3cbd6}
+
+/* ── s10 收尾 ── */
+#s10 .pad{display:grid;align-content:center;justify-items:start;gap:24px}
+#s10 .h1{font-size:108px;line-height:1.02}
+#s10 .h1 small{display:block;font-size:42px;font-weight:600;color:#7f8896;
+  letter-spacing:0;margin-top:22px}
+#s10 .repo{font:600 32px/1 ui-monospace,Menlo,monospace;color:#5ddb8a;margin-top:8px}
+#s10 .howto{font-size:24px;color:#9ba4b2;margin-top:2px}
+#s10 .howto b{color:#fff;font-weight:600}
+#s10 .meta{display:flex;gap:12px;margin-top:20px}
+#s10 .meta span{border:1px solid #262d38;border-radius:9px;padding:11px 18px;
+  font-size:21px;color:#b6bfcb}
+#s10 .ln{width:110px;height:4px;background:#5ddb8a}
+
+
+/* ── 字幕（用户明确要求，之前漏了）──
+   底部居中、半透明底、单行。压不到画面内容：最低 76px，s5 的 HUD 在 150px。*/
+#sub{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);z-index:30;
+  max-width:1560px;text-align:center;pointer-events:none;opacity:0}
+#sub span{display:inline-block;background:rgba(6,8,12,.76);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 24px;
+  font-size:30px;font-weight:600;line-height:1.42;color:#f2f5f8;letter-spacing:.01em;
+  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+
+#prog{position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:rgba(255,255,255,.05);z-index:20}
+#prog i{display:block;height:100%;background:#5ddb8a;transform-origin:0 50%}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="rule"></div>
+
+  <!-- s1 钩子 -->
+  <div class="scene" id="s1"><div class="pad">
+    <div class="k">开机第一件事</div>
+    <div class="h1" style="margin-top:22px">这三十秒<br>你每次真的<br><span class="hi">看完了吗？</span></div>
+  </div></div>
+
+  <!-- s2 对比 -->
+  <div class="scene" id="s2"><div class="pad">
+    <div>
+      <div class="k" style="margin-bottom:26px">厂商桌面</div>
+      <div class="badlist">
+        <div class="it"><i>✗</i>开机广告 30 秒</div>
+        <div class="it"><i>✗</i>首屏推荐位 8 个</div>
+        <div class="it"><i>✗</i>会员入口 × 3</div>
+        <div class="it"><i>✗</i>预装应用 40+</div>
+      </div>
+      <div class="sub" style="margin-top:32px;font-size:24px;color:#6f7887">关不掉，也删不掉</div>
+    </div>
+    <div>
+      <div class="shot"><img src="../demo-material/01-home.png" alt=""></div>
+      <div class="cap">换掉之后：只剩时间和你的应用</div>
+    </div>
+  </div></div>
+
+  <!-- s3 是什么（净屏） -->
+  <div class="scene" id="s3"><div class="pad">
+    <div class="shot" id="s3shot"><img src="../demo-material/01-home.png" alt=""></div>
+    <div>
+      <div class="k">净屏 · CleanYourTV 中文版</div>
+      <div class="h2" style="margin:16px 0 18px">把电视桌面<br>换成你自己的</div>
+      <div class="sub" style="font-size:25px">一个启动器，只显示应用本身。<br>没有广告位，没有推荐位，没有会员入口。</div>
+      <div class="figs" style="margin-top:36px">
+        <div class="fig"><b>442</b><span>款电视型号</span></div>
+        <div class="fig"><b>72</b><span>个品牌</span></div>
+        <div class="fig"><b>576</b><span>KB · 整包体积</span></div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- s4 Android 6 -->
+  <div class="scene" id="s4"><div class="pad">
+    <div>
+      <div class="k">这台海信停在 Android 6</div>
+      <div class="h2" style="margin-top:14px">官方装不上去，我们编出来了</div>
+    </div>
+    <div class="cards">
+      <div class="card off"><div class="k">官方版</div>
+        <div class="vh"><span class="ver">API 26</span><span class="mk">✗</span></div>
+        <p>要求 Android 8.0 以上。装到 6.0 的机器上是一片空白。</p></div>
+      <div class="card win"><div class="k">中文分支</div>
+        <div class="vh"><span class="ver">API 23</span><span class="mk">✓</span></div>
+        <p>Android 6.0 起能跑。五张背景图编进安装包，开机即用。</p></div>
+    </div>
+    <div class="note">为什么官方会白屏：这类机器的 <b>外部存储被裁掉了</b>，图片推不进去。
+      把背景图打进 APK 是唯一能让它显示的办法。</div>
+  </div></div>
+
+  <!-- s5 动态壁纸 -->
+  <div class="scene" id="s5">
+    <video id="wall" src="../demo-material/03-wallpaper-motion.mp4" muted playsinline preload="auto"></video>
+    <div class="fr"></div>
+    <div class="hud"><i class="dot"></i><span class="t">照片当桌面，而且是动的</span>
+      <span class="s">20 秒一轮 · 方向每轮随机</span></div>
+  </div>
+
+  <!-- s6 半透明 + 换图时间线 -->
+  <div class="scene" id="s6"><div class="pad">
+    <div><div class="shot"><img src="../demo-material/02-focus.png" alt=""></div></div>
+    <div>
+      <div class="k">卡片</div>
+      <div class="h2" style="margin:16px 0 14px;font-size:52px">半透明，照片<br>从下面透出来</div>
+      <div class="sub" style="font-size:24px">官方卡片是实心深灰，照片被一格一格盖住。</div>
+      <div class="tl">
+        <div class="k" style="margin-bottom:14px">换图过程</div>
+        <div class="bar">
+          <i id="tf1" style="background:#2b3442;width:0"></i>
+          <i id="tf2" style="background:#5a6270;width:0"></i>
+          <i id="tf3" style="background:#5ddb8a;width:0"></i>
+          <i id="tf4" style="background:#2b3442;width:0"></i>
+        </div>
+        <div class="lb"><span>0.22s 淡出</span><span>从不淡到全黑</span><span>0.36s 淡入</span></div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- s7 频率排序 -->
+  <div class="scene" id="s7"><div class="pad">
+    <div>
+      <div class="k">应用列表</div>
+      <div class="h2" style="margin:16px 0 14px;font-size:52px">用得多的<br>自己跑到前面</div>
+      <div class="sub" style="font-size:24px">读系统使用统计；没授权就退回字母序。</div>
+      <div class="freq">
+        <div class="fl"><span>光随影动</span><span class="tr"><i data-w="92%"></i></span><span class="n">142</span></div>
+        <div class="fl"><span>Just Player</span><span class="tr"><i data-w="64%"></i></span><span class="n">98</span></div>
+        <div class="fl"><span>智能床</span><span class="tr"><i data-w="41%"></i></span><span class="n">63</span></div>
+        <div class="fl"><span>Miracast</span><span class="tr"><i data-w="22%"></i></span><span class="n">34</span></div>
+      </div>
+    </div>
+    <div><div class="shot"><img src="../demo-material/04-apps.png" alt=""></div></div>
+  </div></div>
+
+  <!-- s8 数据 -->
+  <div class="scene" id="s8"><div class="pad">
+    <div><div class="k">实机实测 · 海信 VIDAA / maxim / Android 6</div>
+      <div class="h2" style="margin-top:14px">1 GB 内存的老电视，每一 KB 都要算</div></div>
+    <div class="grid">
+      <div class="cell"><div class="num">576<span class="unit">KB</span></div>
+        <div class="cap">整包体积（Android 8 版）<br>Android 6 版 1278 KB</div></div>
+      <div class="cell"><div class="num">24<span class="unit">MB</span></div>
+        <div class="cap">运行内存占用</div></div>
+      <div class="cell"><div class="num">13<span class="unit">ms</span></div>
+        <div class="cap">壁纸动画 95% 帧时间<br>60 fps 预算 16.7 ms</div></div>
+      <div class="cell"><div class="num">1.6<span class="unit">%</span></div>
+        <div class="cap">掉帧率 · 崩溃 0 次</div></div>
+    </div>
+    <div class="wave">
+      <div class="k" style="margin-bottom:12px">芯片侧帧时间（我们的动画关掉也一样）</div>
+      <div class="row" id="waverow"></div>
+      <div class="lb"><span>11 帧正常 ≈ 16.7 ms</span><span>每约 11 帧一次 133 ms 空洞</span></div>
+    </div>
+  </div></div>
+
+  <!-- s9 坦白 -->
+  <div class="scene" id="s9"><div class="pad">
+    <div class="k">说个实在的</div>
+    <blockquote style="margin-top:16px">这台 maxim 芯片每十几帧会自己停一下，<b>133 毫秒</b>。
+      把我们的动画整个关掉，这个空洞照样在 —— 它来自芯片和海信系统本身。</blockquote>
+    <div class="small">我们能做的是 <b>让背景慢到你察觉不到那一下</b>，不是硬说它不卡。</div>
+  </div></div>
+
+  <!-- s10 收尾 -->
+  <div class="scene" id="s10"><div class="pad">
+    <div class="txt">
+      <div class="ln"></div>
+      <div class="h1">净屏<small>CleanYourTV 中文版</small></div>
+      <div class="repo">github.com/symi-daguo/cleanyourtv</div>
+      <div class="howto">GitHub 搜索 <b>cleanyourtv</b> · 中文分支在 Releases 里下 APK</div>
+      <div class="meta"><span>Android 6.0+</span><span>五张背景图已打包</span><span>576 KB</span><span>开源</span></div>
+    </div>
+  </div></div>
+
+  <div id="sub"><span id="subtxt"></span></div>
+  <div id="prog"><i id="progbar"></i></div>
+</div>
+
+<script>
+// <SUBS>
+const SUBS = [[0.0,2.3,"国产电视开机那三十秒广告，"],[2.3,4.06,"你每次真的看完了吗？"],[4.06,5.65,"关不掉，也删不掉。"],[5.65,8.83,"净屏，CleanYourTV中文版。"],[8.83,11.66,"它把电视自带的臃肿桌面整个换掉，"],[11.66,13.43,"只留下你自己的应用。"],[13.43,15.02,"四百四十二款机型，"],[15.02,16.25,"七十二个品牌，"],[16.25,17.67,"一个安装包搞定。"],[17.67,20.85,"官方版要求Android八点零以上。"],[20.85,24.73,"而这台海信停在六点零，官方装上去是一片空白。"],[24.73,27.56,"因为这类机器的外部存储被裁掉了，"],[27.56,28.79,"图片推不进去。"],[28.79,30.74,"中文分支把它编了进来，"],[30.74,33.03,"五张背景图直接打进安装包，"],[33.03,34.09,"开机就能用。"],[34.09,36.39,"照片能当桌面，而且是动的。"],[36.39,38.16,"二十秒一轮缓慢平移，"],[38.16,40.81,"每一圈走的都是不同的随机路线。"],[40.81,44.16,"卡片可以调成半透明，照片从下面透出来。"],[44.16,46.11,"换图是零点二二秒淡出、"],[46.11,47.52,"零点三六秒淡入，"],[47.52,49.11,"而且从不淡到全黑，"],[49.11,50.7,"所以你看不到硬切。"],[50.7,53.35,"应用列表按你实际的使用频率排，"],[53.35,55.29,"用得多的自己跑到前面。"],[55.29,57.06,"整包五百七十六KB。"],[57.06,59.71,"因为目标是一GB内存的老电视，"],[59.71,61.12,"每一KB都要算。"],[61.12,62.71,"实测二十四兆内存，"],[62.71,65.01,"六十帧只掉一点六个百分点，"],[65.01,65.89,"崩溃零次。"],[65.89,66.95,"说个实在的。"],[66.95,70.48,"这台maxim芯片每十几帧会自己停一下，"],[70.48,71.9,"一百三十三毫秒。"],[71.9,75.25,"把我们的动画整个关掉，这个空洞照样在。"],[75.25,77.55,"它来自芯片和海信系统本身。"],[77.55,81.08,"我们能做的是让背景慢到你察觉不到那一下，"],[81.08,82.5,"不是硬说它不卡。"],[82.5,83.73,"仓库在我主页，"],[83.73,84.62,"中文分支，"],[84.62,86.56,"五张背景图已经打包好。"]];
+// </SUBS>
+
+// <TIMELINE>
+const DUR = 88.16;
+const SC = {
+  s1:[0.00,3.68],
+  s2:[3.68,5.96],
+  s3:[5.96,16.20],
+  s4:[16.20,31.92],
+  s5:[31.92,39.32],
+  s6:[39.32,50.16],
+  s7:[50.16,54.72],
+  s8:[54.72,65.20],
+  s9:[65.20,82.32],
+  s10:[82.32,88.16]
+};
+// </TIMELINE>
+
+const CL = (x,a,b) => Math.max(a, Math.min(b, x));
+const P = (t,k) => { const r = SC[k]; return r ? CL((t-r[0])/(r[1]-r[0]),0,1) : 0; };
+const $ = id => document.getElementById(id);
+const ORD = ['s1','s2','s3','s4','s5','s6','s7','s8','s9','s10'];
+const wall = $('wall');
+let lastSeek = -1;
+
+// 帧时间示意图：11 格正常 + 第 12 格是 133ms 空洞（高度固定，用 sin 造起伏，可复现）
+(function () {
+  const row = $('waverow');
+  for (let i = 0; i < 12; i++) {
+    const b = document.createElement('i');
+    if (i === 11) { b.className = 'gap'; b.style.height = '52px'; }
+    else b.style.height = Math.round(9 + Math.abs(Math.sin(i * 1.7)) * 13) + 'px';
+    row.appendChild(b);
+  }
+})();
+
+// 字幕查表：二分找当前时间落在哪一行
+function subAt(t) {
+  let lo = 0, hi = SUBS.length - 1;
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    if (t < SUBS[m][0]) hi = m - 1;
+    else if (t >= SUBS[m][1]) lo = m + 1;
+    else return m;
+  }
+  return -1;
+}
+let lastSub = -1;
+
+window.__frame = async (t) => {
+  t = Math.max(0, Math.min(DUR - 0.01, t));
+
+  ORD.forEach(k => { const e = $(k); if (e) e.style.opacity = '0'; });
+  let cur = 's1';
+  for (const k in SC) {
+    const a = SC[k][0], b = SC[k][1];
+    if (t >= a && t < b) { cur = k; break; }
+  }
+  if (!SC.s10 && t >= DUR - 1.7) cur = 's10';
+  const el = $(cur); if (el) el.style.opacity = '1';
+  $('progbar').style.transform = 'scaleX(' + (t / DUR) + ')';
+
+  // 字幕：只在换行时改 textContent，避免每帧重排
+  const si = subAt(t);
+  const subEl = $('sub');
+  if (si >= 0) {
+    if (si !== lastSub) { $('subtxt').textContent = SUBS[si][2]; lastSub = si; }
+    subEl.style.opacity = '1';
+  } else {
+    subEl.style.opacity = '0';
+    lastSub = -1;
+  }
+
+  // s1：大字落下
+  if (cur === 's1') {
+    const p = P(t, 's1'), h = el.querySelector('.h1');
+    h.style.opacity = String(CL(p / 0.3, 0, 1));
+    h.style.transform = 'translateY(' + (1 - CL(p / 0.34, 0, 1)) * 28 + 'px)';
+  }
+
+  // s2：左右依次进入，右侧轻推近
+  if (cur === 's2') {
+    const p = P(t, 's2');
+    const L = el.querySelector('.pad > div:first-child');
+    const R = el.querySelector('.pad > div:last-child');
+    // 对比幕只有 2.3s（配音「关不掉，也删不掉」就这几秒），
+    // 入场必须快 —— 原来 0.22/0.3 的曲线根本来不及落位。
+    const li = CL(p / 0.1, 0, 1), ri = CL((p - 0.05) / 0.16, 0, 1);
+    L.style.opacity = String(li);
+    L.style.transform = 'translateX(' + (1 - li) * -26 + 'px)';
+    R.style.opacity = String(ri);
+    R.style.transform = 'translateX(' + (1 - ri) * 30 + 'px)';
+    const z = CL((p - 0.3) / 0.5, 0, 1);
+    el.querySelector('.shot').style.transform = 'scale(' + (1 + z * 0.03) + ')';
+  }
+
+  // s3：全景推近 + 三个数字依次亮
+  if (cur === 's3') {
+    const p = P(t, 's3');
+    const shot = $('s3shot');
+    if (shot) shot.style.transform = 'scale(' + (1.02 + p * 0.07) + ')';
+    el.querySelectorAll('.fig').forEach((f, i) => {
+      const on = CL((p - 0.18 - i * 0.13) / 0.2, 0, 1);
+      f.style.opacity = String(0.16 + on * 0.84);
+      f.style.transform = 'translateX(' + (1 - on) * 18 + 'px)';
+    });
+  }
+
+  // s4：先「官方不行」，再「我们能」
+  if (cur === 's4') {
+    const p = P(t, 's4');
+    const cs = el.querySelectorAll('.card');
+    cs[0].style.opacity = String(0.35 + CL(p / 0.16, 0, 1) * 0.5);
+    cs[1].style.opacity = String(CL((p - 0.26) / 0.2, 0, 1));
+    el.querySelector('.note').style.opacity = String(CL((p - 0.52) / 0.2, 0, 1));
+  }
+
+  // s5：视频 seek 后截图（必须等 seeked，否则拿到上一帧）
+  if (cur === 's5') {
+    const want = CL(t - SC.s5[0] + 7.6, 0, 29.2);
+    if (Math.abs(want - lastSeek) > 1 / 48) {
+      lastSeek = want;
+      try {
+        wall.currentTime = want;
+        await new Promise(res => {
+          let done = false;
+          const fin = () => { if (!done) { done = true; wall.removeEventListener('seeked', fin); res(); } };
+          wall.addEventListener('seeked', fin);
+          setTimeout(fin, 130);
+        });
+      } catch (e) {}
+    }
+  }
+
+  // s6：换图时间线条按 0.22 / 0.32 / 0.36 的比例长出来
+  if (cur === 's6') {
+    const p = P(t, 's6');
+    el.querySelector('.shot').style.transform = 'scale(' + (1.02 + p * 0.05) + ')';
+    const g = CL((p - 0.1) / 0.5, 0, 1);
+    $('tf1').style.width = (0.22 / 0.9 * 100 * g) + '%';
+    $('tf2').style.width = (0.32 / 0.9 * 100 * g) + '%';
+    $('tf3').style.width = (0.36 / 0.9 * 100 * g) + '%';
+  }
+
+  // s7：频率条依次填满
+  if (cur === 's7') {
+    const p = P(t, 's7');
+    el.querySelectorAll('.fl .tr i').forEach((b, i) => {
+      const on = CL((p - 0.12 - i * 0.1) / 0.26, 0, 1);
+      b.style.width = 'calc(' + (b.dataset.w || '0%') + ' * ' + on + ')';
+    });
+    el.querySelector('.shot').style.transform = 'scale(' + (1.02 + p * 0.05) + ')';
+  }
+
+  // s8：四个数据依次亮，波形随后出现
+  if (cur === 's8') {
+    const p = P(t, 's8');
+    el.querySelectorAll('.cell').forEach((c, i) => {
+      const on = CL((p - 0.04 - i * 0.08) / 0.16, 0, 1);
+      c.style.opacity = String(0.2 + on * 0.8);
+      c.style.borderLeftColor = on > 0.5 ? '#5ddb8a' : '#232a35';
+    });
+    el.querySelector('.wave').style.opacity = String(CL((p - 0.2) / 0.18, 0, 1));
+  }
+
+  // s10：文字依次落位（现在是两栏，取 .txt 里的子元素）
+  if (cur === 's10') {
+    const p = P(t, 's10');
+    const els = el.querySelectorAll('.txt > *');
+    els.forEach((e, i) => {
+      const on = CL((p - i * 0.08) / 0.26, 0, 1);
+      e.style.opacity = String(on);
+      e.style.transform = 'translateY(' + (1 - on) * 20 + 'px)';
+    });
+    const shot = el.querySelector('.shot');
+    if (shot) {
+      const sIn = CL((p - 0.18) / 0.4, 0, 1);
+      shot.style.opacity = String(sIn);
+      shot.style.transform = 'translateX(' + (1 - sIn) * 28 + 'px)';
+    }
+  }
+
+  // s9：引用块从左侧推入
+  if (cur === 's9') {
+    const p = P(t, 's9');
+    const q = el.querySelector('blockquote');
+    q.style.opacity = String(CL(p / 0.28, 0, 1));
+    q.style.transform = 'translateX(' + (1 - CL(p / 0.32, 0, 1)) * -22 + 'px)';
+    el.querySelector('.small').style.opacity = String(CL((p - 0.48) / 0.24, 0, 1));
+  }
+};
+
+window.__frame(0);
+</script>
+</body></html>
