@@ -5,7 +5,7 @@ plugins {
 // minSdk is 26 by default, the value upstream ships. -PlauncherMinSdk=23 builds the same source for older
 // sets (Android 6.0, e.g. Hisense VIDAA): java.time is API 26, so anything below it needs the desugared
 // library. That library is only added when the override asks for it, which keeps the default release APK
-// under the 480 KB gate in CI.
+// under the size gate in CI.
 def launcherMinSdk = providers.gradleProperty('launcherMinSdk').isPresent()
         ? providers.gradleProperty('launcherMinSdk').get().toInteger()
         : 26
@@ -16,17 +16,27 @@ android {
     compileSdk 34
 
     defaultConfig {
-        // Opt-in identity for firmware with a package-name HOME allowlist; see docs/devices/xiaomi-mitv-aetp0-dofus.md.
+        // Opt-in identity for firmware with a package-name HOME allowlist.
+        // Xiaomi: docs/devices/xiaomi-mitv-aetp0-dofus.md (com.ts.launcher).
+        // ColorOS TV: docs/devices/oppo-k9-55-oppocnm632.md (com.oneplus.tv.launcher2).
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.gathin.tvhome')
-        minSdk 26
-        // -PlauncherMinSdk replaces the 26 above for older sets (Android 6.0, API 23). A separate
-        // statement, so tests/test_agents_md.py still reads the default from this file.
-        if (launcherMinSdk != 26) {
-            minSdk launcherMinSdk
-        }
+        // -PlauncherMinSdk=23 replaces the 26 upstream ships, for older sets (Android 6.0, API 23).
+        // It has to be assigned here and not added as a second statement: R8 reads the variant's minSdk to
+        // decide how to desugar lambdas, and it took the 26 from the default line. Lambdas then came out as
+        // invokedynamic against java.lang.invoke.LambdaMetafactory, which is API 26, and the app died on launch
+        // with "NoClassDefFoundError: RemoteKeys$$ExternalSyntheticLambda1" on an Android 6 set.
+        minSdk launcherMinSdk
         targetSdk 34
-        versionCode 9
-        versionName '3.0'
+        versionCode 13
+        versionName '3.4'
+    }
+
+    sourceSets {
+        main {
+            // Only the low-SDK build carries the bundled fallback pictures: they are for sets whose external storage
+            // is cut away (Hisense VIDAA), and 1280x720 JPEGs in every build would eat into the APK size gate.
+            if (desugaredJavaTime) assets.srcDirs += 'src/min23/assets'
+        }
     }
 
     buildTypes {
@@ -34,7 +44,13 @@ android {
             // R8 strips and optimises the code (AndroidX included): smaller APK, faster start on a slow TV CPU.
             minifyEnabled true
             shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (desugaredJavaTime) {
+                // The low-SDK build needs the lambda rules; the default build must not carry them, or
+                // -dontoptimize would make the release APK bigger for no reason.
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'proguard-rules-min23.pro'
+            } else {
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            }
             // Sideloaded over ADB, never published: sign with the debug key so it installs over a debug build.
             signingConfig signingConfigs.debug
         }
@@ -48,30 +64,27 @@ android {
         }
     }
 
-    sourceSets {
-        main {
-            // Only the low-SDK build carries the built-in fallback picture: it is for sets whose external storage
-            // is cut away (Hisense VIDAA), and a 1280x720 JPEG in every build would eat into the 576 KB APK gate.
-            if (desugaredJavaTime) assets.srcDirs += 'src/min23/assets'
-        }
-    }
-
     compileOptions {
-        // java.time is API 26. Below it the calls have to go through desugar_jdk_libs, or the launcher
-        // crashes with NoClassDefFoundError on java.time.LocalDate at the first frame.
-        coreLibraryDesugaringEnabled desugaredJavaTime
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        // Required for the low-SDK build. The dependency alone does nothing: without this flag AGP never packages
+        // desugar_jdk_libs, so java.time has no backport below API 26 and a lambda still desugars into an
+        // invokedynamic against java.lang.invoke.LambdaMetafactory, which is API 26 as well. The app then died on
+        // launch with "NoClassDefFoundError: RemoteKeys$$ExternalSyntheticLambda1" on an Android 6 set.
+        if (desugaredJavaTime) {
+            coreLibraryDesugaringEnabled true
+        }
     }
 }
 
 dependencies {
+    // java.time is API 26. Below it the calls have to go through desugar_jdk_libs, or the launcher
+    // crashes with NoClassDefFoundError on java.time.LocalDate at the first frame.
+    if (desugaredJavaTime) {
+        coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+    }
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
-    // Only in the low-SDK build: see desugaredJavaTime above.
-    if (desugaredJavaTime) {
-        coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
-    }
 }

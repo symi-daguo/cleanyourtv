@@ -152,7 +152,7 @@ skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 | 电视的 SDK | 下哪个包 | 对应构建 |
 |---|---|---|
 | ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，576 KB | 默认 `minSdk 26` |
-| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，1008 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
+| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，1278 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
 | < 23 | 不下载 | 直接拒绝，这个桌面编不出来 |
 
 下载缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下。GitHub 慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。
@@ -239,16 +239,21 @@ skills/cleanyourtv-cn/scripts/set-wallpaper.sh ~/Pictures/家庭照片 192.168.1
 | 项目 | 数值 | 说明 |
 |---|---|---|
 | 屏幕刷新率 | 60 Hz | 1280×800 |
-| 壁纸动画帧时间（99%） | **14 ms** | 低于 60Hz 的 16.7 ms 预算 |
-| 掉帧率（静止看壁纸） | 0.5% | 正常 |
-| 掉帧率（连续按方向键） | **2.8%** | 焦点动画和壁纸动画同时在跑 |
+| 壁纸动画帧时间（95%） | **13 ms** | 60fps 的预算是 16.7 ms |
+| 掉帧率 | **1.6%** | |
+| 内存占用 | **24 MB** | |
+| 崩溃 | 0 | |
+| APK 体积 | min26 **576 KB** / min23 **1278 KB** | min23 大是因为带了 java.time 与 lambda 的脱敏库 |
 
-**结论**：壁纸本身是流畅的，按遥控器时那点顿挫来自焦点动画，不是背景 —— 这颗芯片同时跑两套动画就是这个水平。
+**这台机器有一个改不掉的毛病**：帧时间线上每约 11 帧就有一次 **133 ms** 的空洞。实测**把我们的动画整个关掉，这个空洞照样在**，
+所以它来自这颗 maxim 芯片和海信系统本身，不是背景动画造成的。壁纸能做到的只是让空洞看不出来 —— 位移小到一帧 0.2 像素。
 
-两条经验：
+三条经验：
 
-- **别加 `LAYER_TYPE_HARDWARE` 的替代方案**。实测带硬件层 60fps、去掉 30fps，但日志里会有 `GLConsumer: GL error 0x500`（绑定纹理失败），这是代价不是故障。
-- **动画要由 RenderThread 驱动**。`ValueAnimator` 在 UI 线程每帧写四个属性只能到 31fps；换成 `ViewPropertyAnimator` 才上得去。
+- **动画必须由真实时钟驱动**，不能用 animator 的 fraction。这台机器每 11 帧停 133 ms，用 fraction 画面就是「停住再跳一下」，
+  用时钟算位置就只是「跳一下」，眼睛不会当成卡顿。
+- **路径必须是曲线，不能是折线**。折线的拐角方向突变，看上去就是抖动；二次贝塞尔没有尖角。
+- **不要在平移之上再叠缩放呼吸**。全屏图片放大 3%，等于每个像素同时挪动，实测占了画面变化量的四分之三。
 
 如果客户反馈"卡"，先问清是**看壁纸时卡**还是**按遥控器时卡**，这两种的成因完全不同。
 

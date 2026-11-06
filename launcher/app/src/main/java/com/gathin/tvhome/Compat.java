@@ -2,14 +2,19 @@ package com.gathin.tvhome;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.media.tv.TvInputInfo;
+import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
+import android.net.ConnectivityManager;
 import android.os.Build;
 import android.os.UserManager;
 import android.view.View;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -22,10 +27,13 @@ import java.util.Locale;
 final class Compat {
     private Compat() {}
 
-    /** {@code View#forceHasOverlappingRendering}, API 24: below it the flag does not exist and the view keeps
-     *  drawing through an offscreen buffer. A slower fade, not a broken one. */
+    /** {@code View#forceHasOverlappingRendering}, API 29 (Android 10): below it the flag does not exist and the
+     *  view keeps drawing through an offscreen buffer. A slower fade, not a broken one. Upstream calls it
+     *  unguarded, which its own minSdk 26 does not excuse either - on a set below Android 10 the call lands on
+     *  a method that is not there and the launcher dies in onCreate with
+     *  "NoSuchMethodError: forceHasOverlappingRendering". */
     static void noOverlappingRendering(View view) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) view.forceHasOverlappingRendering(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) view.forceHasOverlappingRendering(false);
     }
 
     /** {@code UserManager#isUserUnlocked}, API 24. Before 7.0 there is no direct-boot storage, so the user is
@@ -66,6 +74,20 @@ final class Compat {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? Bitmap.Config.HARDWARE : Bitmap.Config.ARGB_8888;
     }
 
+    /** {@code ConnectivityManager#registerDefaultNetworkCallback}, API 24. Below it the manager has no default
+     *  callback to register, so the launcher simply goes without the online/offline banner. */
+    static void registerDefaultNetworkCallback(ConnectivityManager manager, ConnectivityManager.NetworkCallback callback) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
+        manager.registerDefaultNetworkCallback(callback);
+    }
+
+    /** {@code PackageManager#getChangedPackages}, API 24. Below it the manager cannot say what changed, so the
+     *  caller treats the grid as up to date and rebuilds it the slow way instead. */
+    static android.content.pm.ChangedPackages changedPackages(PackageManager manager, int sequence) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null;
+        return manager.getChangedPackages(sequence);
+    }
+
     /**
      * The TV input framework, or null on a set that does not have one. Every Android TV has it; Hisense's
      * VIDAA (Android 6) does not, and its {@code getSystemService} hands back a TvInputManager whose binder
@@ -80,6 +102,21 @@ final class Compat {
             return tim;
         } catch (RuntimeException | NoClassDefFoundError absent) {
             return null;
+        }
+    }
+
+    /**
+     * The list of inputs, or an empty list on a set with no usable TV input framework. The manager is probed
+     * once and the answer kept: on a Hisense VIDAA the binder behind it is null and every call throws, so asking
+     * again each time would throw again each time.
+     */
+    static List<TvInputInfo> tvInputList(Context context, TvInputManager manager) {
+        if (manager == null) return Collections.emptyList();
+        try {
+            List<TvInputInfo> list = manager.getTvInputList();
+            return list == null ? Collections.emptyList() : list;
+        } catch (RuntimeException | NoClassDefFoundError absent) {
+            return Collections.emptyList();
         }
     }
 }

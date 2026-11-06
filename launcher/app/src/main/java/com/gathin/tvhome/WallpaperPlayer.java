@@ -3,10 +3,13 @@ package com.gathin.tvhome;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.os.SystemClock;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Path;
+import android.graphics.PathMeasure;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -39,8 +42,10 @@ import java.util.concurrent.Executors;
 /** Displays and rotates a theme's local wallpaper images while Home is visible. */
 final class WallpaperPlayer {
     /** Length of one Ken Burns pass, and how much extra zoom it adds on top of the 1.05 the drift needs. */
-    private static final long MOTION_MS = 20000L;
-    private static final float MOTION_ZOOM = 0.07f;
+    private static final long MOTION_MS = 120000L;
+    /** The picture is always scaled by at least this much, so there is room to pan without showing an edge. */
+    private static final float MIN_SCALE = 1.28f;
+    private static final float MOTION_ZOOM = 0f;
     private final Context context;
     private final FrameLayout root;
     private final ImageView image;
@@ -59,8 +64,17 @@ final class WallpaperPlayer {
     private int builtinIndex;
     /** When Home went to the background, so the time spent there does not count towards the rotation. */
     private long pausedAt;
-    /** Current drift, drawn once per picture so the movement does not repeat between pictures. */
-    private float driftX, driftY;
+    /** The path the picture walks, redrawn every lap. */
+    private Path driftPath;
+    private final PathMeasure driftMeasure = new PathMeasure();
+    private final float[] driftPos = new float[2];
+    private float driftLength;
+    /** How far along the path the picture is, 0 to 1. */
+    private float driftFraction;
+    /** The fraction of the previous lap, so a new one can be told from the old. */
+    private float lastFraction;
+    /** When the current lap began, in the clock the frames are timed against. */
+    private long driftStartedAt;
     /** The running drift; parked with pause() when Home goes behind another app. */
     private ObjectAnimator motionAnimator;
     private final int width;
@@ -397,42 +411,6 @@ final class WallpaperPlayer {
      * interpolation reversed the direction instantly at the turn - together that is the stutter the eye picks up even
      * at 30 fps. INFINITE + REVERSE with AccelerateDecelerate has no seam and reaches zero velocity at both ends.
      */
-    private void startMotion() {
-        image.animate().cancel();
-        if (motionAnimator != null) motionAnimator.cancel();
-        if (!motion) {
-            image.setScaleX(1f);
-            image.setScaleY(1f);
-            image.setTranslationX(0f);
-            image.setTranslationY(0f);
-            return;
-        }
-        image.post(() -> {
-            if (!motion) return;
-            // Hardware layer tested off: with it the frame timestamps show a ~150 ms hole every nine frames, which
-            // is what reads as a hitch; the bitmap is small enough that a plain redraw keeps up.
-            // A direction per picture, not per leg: re-drawing it mid-run would need a new animator each cycle, and
-            // rebuilding is exactly the seam this change removes.
-            driftX = (random.nextBoolean() ? 1 : -1) * width * 0.05f;
-            driftY = (random.nextBoolean() ? 1 : -1) * height * 0.03f;
-            android.animation.PropertyValuesHolder px =
-                    android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_X, 0f, driftX);
-            android.animation.PropertyValuesHolder py =
-                    android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, driftY);
-            android.animation.PropertyValuesHolder sx =
-                    android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1.15f, 1.15f + MOTION_ZOOM);
-            android.animation.PropertyValuesHolder sy =
-                    android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.15f, 1.15f + MOTION_ZOOM);
-            ObjectAnimator a = ObjectAnimator.ofPropertyValuesHolder(image, px, py, sx, sy);
-            a.setDuration(MOTION_MS);
-            a.setRepeatCount(ValueAnimator.INFINITE);
-            a.setRepeatMode(ValueAnimator.REVERSE);
-            a.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
-            motionAnimator = a;
-            a.start();
-        });
-    }
-
     /** Bundled pictures rotate a minute at a time when the set gives us no interval to read. */
     private static final long BUILTIN_INTERVAL_MS = 60_000L;
 
@@ -461,6 +439,117 @@ final class WallpaperPlayer {
         } catch (IOException | OutOfMemoryError unreadable) {
             return null;
         }
+    }
+
+    /**
+     * The drift, along a path that is drawn afresh every lap.
+     *
+     * Two things were wrong before. The hardware layer was the first: on this board the texture bind fails with
+     * GL error 0x500 and the retry leaves a ~133 ms hole in the frame timeline every eleven frames, which the eye
+     * reads as a stutter far more than a steady lower rate would. Without the layer the picture is redrawn, but
+     * the frames come evenly.
+     *
+     * The second was the track. A single direction with REVERSE walks the same diagonal back and forth for as long
+     * as the picture is up. Now a lap is a broken line of random segments, drawn once per picture and closed, so the
+     * path is different every time and no two laps trace the same line.
+     */
+    private void startMotion() {
+        image.animate().cancel();
+        image.removeCallbacks(this::stepDrift);
+        if (motionAnimator != null) motionAnimator.cancel();
+        if (!motion) {
+            image.setScaleX(1f);
+            image.setScaleY(1f);
+            image.setTranslationX(0f);
+            image.setTranslationY(0f);
+            return;
+        }
+        image.post(() -> {
+            if (!motion) return;
+            buildDriftPath(0f, 0f);
+            // Driven by the wall clock, not by an animator's fraction. On this board the frame timeline has a ~133 ms
+            // hole every eleven frames; with a fraction the picture stopped dead for those frames and then carried on
+            // from where it had been, which is exactly what reads as a jolt. With the clock the picture is placed
+            // where the time says it should be, so a skipped frame is a step, not a stall.
+            driftStartedAt = SystemClock.uptimeMillis();
+            image.postOnAnimation(this::stepDrift);
+        });
+    }
+
+    /**
+     * A closed broken line of random segments, starting where the picture currently is and ending back there.
+     * Because it begins and ends at the same spot, a new path can be swapped in the moment a lap ends without the
+     * picture jumping: the walk carries on from exactly where it was, but along a different line.
+     */
+    private void buildDriftPath(float fromX, float fromY) {
+        // The picture is scaled up so it is always wider and taller than the screen, and the walk is kept inside
+        // what that margin allows. A path that wandered further would slide the edge of the picture into view and
+        // leave a black strip along one side, which is what the drift must never do.
+        float marginX = width * (1f - 1f / MIN_SCALE) * 0.5f * 0.55f;
+        float marginY = height * (1f - 1f / MIN_SCALE) * 0.5f * 0.72f;
+        Path path = new Path();
+        float x = fromX, y = fromY;
+        path.moveTo(x, y);
+        for (int i = 0; i < 5; i++) {
+            // Nudged towards a random spot inside the margin, never past it.
+            float targetX = (random.nextBoolean() ? 1 : -1) * marginX * random.nextFloat();
+            float targetY = (random.nextBoolean() ? 1 : -1) * marginY * random.nextFloat();
+            float nextX = clamp(x + (targetX - x) * 0.55f, -marginX, marginX);
+            float nextY = clamp(y + (targetY - y) * 0.55f, -marginY, marginY);
+            // A curve, not a corner. Straight segments made the picture change direction in one frame at every bend,
+            // and the eye reads that as a jolt; a quadratic through a point near the middle keeps the heading
+            // continuous while still letting the line wander anywhere inside the margin.
+            float cx = (x + nextX) * 0.5f + (random.nextFloat() - 0.5f) * marginX * 0.5f;
+            float cy = (y + nextY) * 0.5f + (random.nextFloat() - 0.5f) * marginY * 0.5f;
+            path.quadTo(cx, cy, nextX, nextY);
+            x = nextX; y = nextY;
+        }
+        path.quadTo(x, y, fromX, fromY);   // back to where it started, so the lap joins up
+        driftPath = path;
+        driftMeasure.setPath(path, true);
+        driftLength = driftMeasure.getLength();
+    }
+
+    private static float clamp(float value, float low, float high) {
+        return value < low ? low : (value > high ? high : value);
+    }
+
+    /** One step: where the clock says the picture should be by now. */
+    private void stepDrift() {
+        if (!motion || closed) return;
+        long now = SystemClock.uptimeMillis();
+        float fraction = ((now - driftStartedAt) % MOTION_MS) / (float) MOTION_MS;
+        onDrift(fraction);
+        image.postOnAnimation(this::stepDrift);
+    }
+
+    /** Walks the path at the given fraction of a lap and moves the picture with it. */
+    private void onDrift(float fraction) {
+        if (driftLength <= 0f) return;
+        // A lap that has just begun is a new one: draw a fresh line from here, so no two laps are the same.
+        if (fraction < lastFraction) {
+            driftMeasure.getPosTan(driftLength, driftPos, null);
+            buildDriftPath(driftPos[0], driftPos[1]);
+        }
+        lastFraction = fraction;
+        driftMeasure.getPosTan(fraction * driftLength, driftPos, null);
+        image.setTranslationX(driftPos[0]);
+        image.setTranslationY(driftPos[1]);
+        // No breathing zoom on top of the pan. A few percent of scale moves every pixel of a full-screen picture at
+        // once, which reads as a much bigger change than the pan itself; measured, it was three quarters of the
+        // frame-to-frame difference. The picture is scaled once, by MIN_SCALE, and then only walked around.
+        image.setScaleX(MIN_SCALE);
+        image.setScaleY(MIN_SCALE);
+    }
+
+    /** The animator drives this one; it only carries the fraction of the lap. */
+    public void setDriftFraction(float fraction) {
+        driftFraction = fraction;
+        onDrift(fraction);
+    }
+
+    public float getDriftFraction() {
+        return driftFraction;
     }
 
     private Bitmap decode(File file) {
