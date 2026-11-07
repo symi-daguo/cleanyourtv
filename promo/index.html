@@ -163,19 +163,20 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
 
 
 /* ── 字幕 ──
-   学旧版成片（miloco 120s）：那里没有「背景 + 念稿字幕条」两套文字打架，
-   文字是画面设计的一部分。这里保留字幕条（客户要求），但：
-     · 每幕一句提炼，不是口播全文（内容见 cues.txt）
-     · 无底框，38px 白字 + 强投影，靠底部渐变保证可读
-   原来的半透明胶囊 + 30px 更像素人字幕，压住了画面也压住了设计。*/
-#subveil{position:absolute;left:0;right:0;bottom:0;height:230px;z-index:29;
-  pointer-events:none;
-  background:linear-gradient(0deg, rgba(6,8,12,.74) 0%, rgba(6,8,12,.32) 46%, transparent 100%)}
-#sub{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);z-index:30;
-  max-width:1580px;text-align:center;pointer-events:none;opacity:0}
-#sub span{display:inline-block;font-size:38px;font-weight:600;line-height:1.36;
-  color:#fff;letter-spacing:.005em;padding:0 10px;
-  text-shadow:0 2px 16px rgba(0,0,0,.92), 0 1px 3px rgba(0,0,0,.95)}
+   照 video-pipeline/projects/xiaomi-home-official/compositions/captions.html：
+   白色毛玻璃胶囊 + 深色字 + 底部 44px + 34px。那几版成片用的就是这套，
+   用户说「之前字幕匹配非常优秀」。我上一版自己发明的「无底框大字」是退步。
+   字幕内容 = 口播原文（词级对齐），不是提炼短语。*/
+#sub{position:absolute;left:0;right:0;bottom:44px;height:auto;z-index:30;
+  display:flex;justify-content:center;align-items:flex-end;
+  pointer-events:none;opacity:0}
+#sub span{display:inline-block;white-space:nowrap;
+  background:linear-gradient(152deg,rgba(255,255,255,.62),rgba(255,255,255,.40));
+  backdrop-filter:blur(40px) saturate(200%);-webkit-backdrop-filter:blur(40px) saturate(200%);
+  border:1px solid rgba(255,255,255,.86);border-radius:999px;padding:18px 44px;
+  font-family:'Noto Sans SC',system-ui,-apple-system,sans-serif;
+  font-weight:500;font-size:34px;letter-spacing:.01em;color:#16181d;
+  box-shadow:0 12px 40px rgba(0,0,0,.28)}
 
 #prog{position:absolute;left:0;right:0;bottom:0;height:3px;
   background:rgba(255,255,255,.05);z-index:20}
@@ -341,15 +342,13 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
       <div class="meta"><span>Android 6.0+</span><span>五张背景图已打包</span><span>576 KB</span><span>开源</span></div>
     </div>
   </div></div>
-
-  <div id="subveil"></div>
   <div id="sub"><span id="subtxt"></span></div>
   <div id="prog"><i id="progbar"></i></div>
 </div>
 
 <script>
 // <SUBS>
-const SUBS = [[0.06,3.79,"开机广告 30 秒，关不掉"],[4.1,6.28,"四项负担，删不掉也关不掉"],[6.59,15.84,"一个启动器，只显示应用"],[16.15,30.92,"官方要 8.0，我们 6.0 也能装"],[31.23,38.12,"20 秒一轮，方向每轮随机"],[38.43,49.32,"0.22 秒淡出，0.36 秒淡入"],[49.63,54.0,"按使用频率自动排序"],[54.31,65.2,"576 KB · 24 MB · 1.6% 掉帧"],[65.51,79.68,"adb connect → install → start"],[79.99,85.79,"GitHub 搜 cleanyourtv"]];
+const SUBS = [[0.0,2.065,"国产电视开机那三十秒广告，"],[2.065,3.774,"你每次真的看完了吗？"],[3.774,5.381,"关不掉，也删不掉。"],[5.381,8.425,"净屏，CleanYourTV 中文版。"],[8.425,11.05,"它把电视自带的臃肿桌面整个换掉，"],[11.05,12.482,"只留下你自己的应用。"],[12.482,15.214,"四百四十二款机型，七十二个品牌，"],[15.214,16.43,"一个安装包搞定。"],[16.43,19.141,"官方版要求 Android 八点零以上。"],[19.141,21.2,"而这台海信停在六点零，"],[21.2,23.021,"官方装上去是一片空白。"],[23.021,25.566,"因为这类机器的外部存储被裁掉了，"],[25.566,26.599,"图片推不进去。"],[26.599,28.444,"中文分支把它编了进来，"],[28.444,31.502,"五张背景图直接打进安装包，开机就能用。"],[31.502,34.224,"照片能当桌面，而且是动的。"],[34.224,35.872,"二十秒一轮缓慢平移，"],[35.872,38.356,"每一圈走的都是不同的随机路线。"],[38.356,42.04,"卡片可以调成半透明，照片从下面透出来。"],[42.04,46.391,"换图是零点二二秒淡出、零点三六秒淡入，"],[46.391,49.598,"而且从不淡到全黑，所以你看不到硬切。"],[49.598,52.235,"应用列表按你实际的使用频率排，"],[52.235,54.415,"用得多的自己跑到前面。"],[54.415,56.243,"整包五百七十六 KB。"],[56.243,58.871,"因为目标是一 GB 内存的老电视，"],[58.871,60.695,"每一 KB 都要算。"],[60.695,62.404,"实测二十四兆内存，"],[62.404,65.7,"六十帧只掉一点六个百分点，崩溃零次。"],[65.7,66.973,"装起来不用 U 盘。"],[66.973,69.058,"电视和电脑连同一个 Wi-Fi，"],[69.058,70.554,"在电视上打开网络调试，"],[70.554,71.818,"剩下交给 Agent。"],[71.818,75.222,"它用 ADB 连上去，装包、启动、"],[75.222,78.768,"授权使用统计，一条命令走完。"],[78.768,79.869,"老电视也一样。"],[79.869,82.251,"仓库在我主页，中文分支，"],[82.251,84.2,"五张背景图已经打包好。"]];
 // </SUBS>
 
 // <TIMELINE>
