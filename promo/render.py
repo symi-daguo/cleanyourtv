@@ -10,6 +10,7 @@
 """
 import argparse
 import asyncio
+import json
 import os
 import pathlib
 import subprocess
@@ -86,9 +87,15 @@ async def render(fps, until, out, frame_dir):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fps", type=int, default=24)
-    ap.add_argument("--until", type=float, default=88.16)
+    ap.add_argument("--until", type=float, default=0,
+                    help="渲染到第几秒；0 = 读 timeline.json 的 duration")
     ap.add_argument("--out", default="")
     a = ap.parse_args()
+    until = a.until
+    if not until:
+        tl = pathlib.Path(__file__).resolve().parent / "timeline.json"
+        until = json.loads(tl.read_text(encoding="utf-8"))["duration"] if tl.exists() else 86.0
+    a.until = until
     name = a.out or ("clean-your-tv-zh-%ds-silent.mp4" % round(a.until))
     rc = asyncio.run(render(a.fps, a.until, HERE / name, HERE / "frames"))
     sys.exit(rc)

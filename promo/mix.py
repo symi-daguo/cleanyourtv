@@ -21,8 +21,12 @@ def main():
     ap.add_argument("--video", default="clean-your-tv-zh-silent.mp4")
     ap.add_argument("--audio", default="speak.mp3")
     ap.add_argument("--out", default="净屏-CleanYourTV-中文版.mp4")
-    ap.add_argument("--dur", default="88.16")
+    ap.add_argument("--dur", default="", help="成片时长，空 = 读 timeline.json")
     a = ap.parse_args()
+    if not a.dur:
+        import json as _json
+        tl = HERE / "timeline.json"
+        a.dur = str(_json.loads(tl.read_text(encoding="utf-8"))["duration"]) if tl.exists() else "86"
 
     video, audio = HERE / a.video, HERE / a.audio
     for f in (video, audio):
