@@ -20,7 +20,7 @@ MODEL = "speech-2.8-hd"
 #   wgqvoice2026  亖米大锅（本人，男声，克隆）  ← 对外片子用这个
 # 之前几版全用了 19 号，等于拿同事的声音当自己的作品发。
 VOICE = "wgqvoice2026"
-SPEED = 1.05
+SPEED = 1.16   # 1.05 基础上再快 10%（用户 2026-11-07 要求）
 
 KEYS = [
     pathlib.Path.home() / ".minimax" / "voice-keys" / "minimax-plan.key",

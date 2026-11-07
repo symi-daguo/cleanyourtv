@@ -134,58 +134,60 @@ def main():
     audio_end = (json.loads(_tl.read_text(encoding="utf-8")).get("audio_total")
                  if _tl.exists() else (chars[-1]["end"] if chars else 0.0))
 
-    # ── 用 whisper 的 segment 当锚点，段内按字数插值 ──────────────
-    # 为什么不用逐字/逐行匹配：ASR 和原文差几个字，指针就会累积偏移，
-    # 37 行下来偏 16 秒（实测）。segment 是 whisper 自己切好的真实时间边界，
-    # 每段独立锚定，误差不会跨段累积。
-    segs_clean = [x for x in segs if norm(x.get("text") or "")]
-    seg_chars = [len(norm(x["text"])) for x in segs_clean]
-    total_seg_chars = sum(seg_chars) or 1
+    # ── 全局滑窗匹配（照 cjk-align.mjs 的 findMatch）──────────────────
+    # 之前两次都错在「限制搜索范围」：
+    #   · 逐字匹配：ASR 错一个字的就卡一下指针，37 行累积偏 16 秒
+    #   · lookahead=260 的滑窗：找不到时回退按字数估，偏 2 秒
+    # 现在每行从「上一行结束位置」一路搜到整条末尾，取相似度最高的那个窗口。
+    # 单调整（只能往后）保证不会跳到前面去，搜索范围不设上限保证不会失配。
+    def find_line(needle, from_idx):
+        n = len(needle)
+        if n == 0 or from_idx >= len(chars):
+            return None
+        best_i, best_score = None, 0.0
+        hi = len(chars) - n
+        for i in range(from_idx, hi + 1):
+            window = "".join(c["ch"] for c in chars[i:i + n])
+            same = 0
+            for a2, b2 in zip(window, needle):
+                if a2 == b2:
+                    same += 1
+            score = same / n
+            if score > best_score:
+                best_score, best_i = score, i
+                if score == 1.0:
+                    break
+        if best_i is None or best_score < 0.45:
+            return None
+        seg = chars[best_i:best_i + n]
+        return seg[0]["start"], seg[-1]["end"], best_i + n, best_score
 
-    def time_at_ratio(r):
-        """全局字数比例 r∈[0,1] → 语音时间。落在哪个 segment 就在段内线性插值。"""
-        target = r * total_seg_chars
-        acc = 0
-        for sg, n in zip(segs_clean, seg_chars):
-            if target <= acc + n or sg is segs_clean[-1]:
-                f = (target - acc) / max(1, n)
-                return sg["start"] + (sg["end"] - sg["start"]) * max(0.0, min(1.0, f))
-            acc += n
-        return audio_end
-
-    total_chars = sum(len(norm(x)) for x in lines) or 1
-    out, acc = [], 0
+    out, idx = [], 0
+    prev_end = 0.0
     for i, ln in enumerate(lines):
-        n = len(norm(ln))
-        start = time_at_ratio(acc / total_chars)
-        acc += n
-        end = time_at_ratio(acc / total_chars)
-        start = max(0.0, min(audio_end, start))
-        end = min(audio_end, max(start + 0.5, end))
-        # w：把这一行按 2~3 字一组切片，起止在行内线性分布（渲染只用到 [0]）
+        hit = find_line(norm(ln), idx)
+        if hit:
+            start, end, idx, score = hit
+        else:
+            # 整条都找不到（ASR 缺了整句）：按字数在剩余时间里分
+            rest = lines[i:]
+            total = sum(len(norm(x)) for x in rest) or 1
+            avail = max(0.0, audio_end - prev_end)
+            start = prev_end
+            end = start + avail * len(norm(ln)) / total
+            score = 0.0
+        if start < prev_end - 0.02:
+            start = prev_end
+        end = min(audio_end, max(start + 0.4, end))
+
+        # 逐词时间：把这一行按字符切片，起点在该行区间内均分
+        # （字幕组件只用 w[0][1]，真正的对齐靠 start/end）
         w = []
         for k in range(0, len(ln), 3):
             w.append([ln[k:k + 3], round(start + (end - start) * k / max(1, len(ln)), 3)])
         out.append({"id": i, "text": ln, "start": round(start, 3),
                     "end": round(end, 3), "w": w})
-
-    # 后处理：字级对齐在末尾一定会耗尽（ASR 比原文少认几个字就没有字符可对了），
-    # 表现为「后面几行起点几乎不动」。从第一处重叠开始，按字数把剩下的时间重分。
-    # 前面的对齐结果保留 —— 只有确实出错的那一段重算。
-    for i in range(1, len(out)):
-        if out[i]["start"] < out[i - 1]["end"] - 0.02 or \
-           out[i]["start"] <= out[i - 1]["start"] + 0.05:
-            base = out[i - 1]["end"]
-            rest = out[i:]
-            total = sum(len(norm(x["text"])) for x in rest) or 1
-            t = base
-            avail = max(0.0, audio_end - base)
-            for x in rest:
-                d = avail * len(norm(x["text"])) / total
-                x["start"] = round(t, 3)
-                x["end"] = round(min(audio_end, t + d), 3)
-                t += d
-            break
+        prev_end = end
 
     (HERE / "captions.json").write_text(
         json.dumps({"lines": out}, ensure_ascii=False, indent=1), encoding="utf-8")
