@@ -162,14 +162,20 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
 #s10 .ln{width:110px;height:4px;background:#5ddb8a}
 
 
-/* ── 字幕（用户明确要求，之前漏了）──
-   底部居中、半透明底、单行。压不到画面内容：最低 76px，s5 的 HUD 在 150px。*/
-#sub{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);z-index:30;
-  max-width:1560px;text-align:center;pointer-events:none;opacity:0}
-#sub span{display:inline-block;background:rgba(6,8,12,.76);backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:11px 24px;
-  font-size:30px;font-weight:600;line-height:1.42;color:#f2f5f8;letter-spacing:.01em;
-  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+/* ── 字幕 ──
+   学旧版成片（miloco 120s）：那里没有「背景 + 念稿字幕条」两套文字打架，
+   文字是画面设计的一部分。这里保留字幕条（客户要求），但：
+     · 每幕一句提炼，不是口播全文（内容见 cues.txt）
+     · 无底框，38px 白字 + 强投影，靠底部渐变保证可读
+   原来的半透明胶囊 + 30px 更像素人字幕，压住了画面也压住了设计。*/
+#subveil{position:absolute;left:0;right:0;bottom:0;height:230px;z-index:29;
+  pointer-events:none;
+  background:linear-gradient(0deg, rgba(6,8,12,.74) 0%, rgba(6,8,12,.32) 46%, transparent 100%)}
+#sub{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);z-index:30;
+  max-width:1580px;text-align:center;pointer-events:none;opacity:0}
+#sub span{display:inline-block;font-size:38px;font-weight:600;line-height:1.36;
+  color:#fff;letter-spacing:.005em;padding:0 10px;
+  text-shadow:0 2px 16px rgba(0,0,0,.92), 0 1px 3px rgba(0,0,0,.95)}
 
 #prog{position:absolute;left:0;right:0;bottom:0;height:3px;
   background:rgba(255,255,255,.05);z-index:20}
@@ -199,14 +205,14 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
       <div class="sub" style="margin-top:32px;font-size:24px;color:#6f7887">关不掉，也删不掉</div>
     </div>
     <div>
-      <div class="shot"><img src="../demo-material/01-home.png" alt=""></div>
+      <div class="shot"><img src="../demo-material/01-home-s.png" alt=""></div>
       <div class="cap">换掉之后：只剩时间和你的应用</div>
     </div>
   </div></div>
 
   <!-- s3 是什么（净屏） -->
   <div class="scene" id="s3"><div class="pad">
-    <div class="shot" id="s3shot"><img src="../demo-material/01-home.png" alt=""></div>
+    <div class="shot" id="s3shot"><img src="../demo-material/01-home-s.png" alt=""></div>
     <div>
       <div class="k">净屏 · CleanYourTV 中文版</div>
       <div class="h2" style="margin:16px 0 18px">把电视桌面<br>换成你自己的</div>
@@ -247,7 +253,7 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
 
   <!-- s6 半透明 + 换图时间线 -->
   <div class="scene" id="s6"><div class="pad">
-    <div><div class="shot"><img src="../demo-material/02-focus.png" alt=""></div></div>
+    <div><div class="shot"><img src="../demo-material/02-focus-s.png" alt=""></div></div>
     <div>
       <div class="k">卡片</div>
       <div class="h2" style="margin:16px 0 14px;font-size:52px">半透明，照片<br>从下面透出来</div>
@@ -278,7 +284,7 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
         <div class="fl"><span>Miracast</span><span class="tr"><i data-w="22%"></i></span><span class="n">34</span></div>
       </div>
     </div>
-    <div><div class="shot"><img src="../demo-material/04-apps.png" alt=""></div></div>
+    <div><div class="shot"><img src="../demo-material/04-apps-s.png" alt=""></div></div>
   </div></div>
 
   <!-- s8 数据 -->
@@ -336,13 +342,14 @@ html,body{width:1920px;height:1080px;margin:0;overflow:hidden;background:#0a0c10
     </div>
   </div></div>
 
+  <div id="subveil"></div>
   <div id="sub"><span id="subtxt"></span></div>
   <div id="prog"><i id="progbar"></i></div>
 </div>
 
 <script>
 // <SUBS>
-const SUBS = [[0.0,2.31,"国产电视开机那三十秒广告，"],[2.31,4.08,"你每次真的看完了吗？"],[4.08,5.68,"关不掉，也删不掉。"],[5.68,8.87,"净屏，CleanYourTV中文版。"],[8.87,11.71,"它把电视自带的臃肿桌面整个换掉，"],[11.71,13.48,"只留下你自己的应用。"],[13.48,15.08,"四百四十二款机型，"],[15.08,16.32,"七十二个品牌，"],[16.32,17.74,"一个安装包搞定。"],[17.74,20.93,"官方版要求Android八点零以上。"],[20.93,24.84,"而这台海信停在六点零，官方装上去是一片空白。"],[24.84,27.67,"因为这类机器的外部存储被裁掉了，"],[27.67,28.92,"图片推不进去。"],[28.92,30.87,"中文分支把它编了进来，"],[30.87,33.17,"五张背景图直接打进安装包，"],[33.17,34.24,"开机就能用。"],[34.24,36.54,"照片能当桌面，而且是动的。"],[36.54,38.32,"二十秒一轮缓慢平移，"],[38.32,40.98,"每一圈走的都是不同的随机路线。"],[40.98,44.35,"卡片可以调成半透明，照片从下面透出来。"],[44.35,46.3,"换图是零点二二秒淡出、"],[46.3,47.72,"零点三六秒淡入，"],[47.72,49.32,"而且从不淡到全黑，"],[49.32,50.91,"所以你看不到硬切。"],[50.91,53.57,"应用列表按你实际的使用频率排，"],[53.57,55.52,"用得多的自己跑到前面。"],[55.52,57.3,"整包五百七十六KB。"],[57.3,59.96,"因为目标是一GB内存的老电视，"],[59.96,61.38,"每一KB都要算。"],[61.38,62.98,"实测二十四兆内存，"],[62.98,65.28,"六十帧只掉一点六个百分点，"],[65.28,66.17,"崩溃零次。"],[66.17,67.59,"装起来不用U盘。"],[67.59,70.25,"电视和电脑连同一个Wi-Fi，"],[70.25,72.2,"在电视上打开网络调试，"],[72.2,73.97,"剩下交给Agent。"],[73.97,76.63,"它用ADB连上去，装包、启动、"],[76.63,77.88,"授权使用统计，"],[77.88,79.12,"一条命令走完。"],[79.12,80.36,"老电视也一样。"],[80.36,81.6,"仓库在我主页，"],[81.6,82.49,"中文分支，"],[82.49,84.44,"五张背景图已经打包好。"]];
+const SUBS = [[0.06,3.79,"开机广告 30 秒，关不掉"],[4.1,6.28,"四项负担，删不掉也关不掉"],[6.59,15.84,"一个启动器，只显示应用"],[16.15,30.92,"官方要 8.0，我们 6.0 也能装"],[31.23,38.12,"20 秒一轮，方向每轮随机"],[38.43,49.32,"0.22 秒淡出，0.36 秒淡入"],[49.63,54.0,"按使用频率自动排序"],[54.31,65.2,"576 KB · 24 MB · 1.6% 掉帧"],[65.51,79.68,"adb connect → install → start"],[79.99,85.79,"GitHub 搜 cleanyourtv"]];
 // </SUBS>
 
 // <TIMELINE>

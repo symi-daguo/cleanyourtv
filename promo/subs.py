@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
-"""生成字幕并注入 index.html。
+"""字幕：每幕一句关键短语，按幕起止整段显示。
 
-时间从 whisper 的 speak.json 来（真实语音时间），
-文本用 speak.txt 的原文 —— whisper 会把「净屏」听成「静平」、「臃肿」听成「雍总」，
-字幕直接用它就露馅了。
+**为什么不用口播全文当字幕**（这是之前做错的地方）：
+    旧版成片（miloco 120s）的字幕不是逐字念稿，是每幕一句提炼 ——
+    口播「家里那台米家摄像头，本来只负责录。现在它能看懂…」，
+    画面字幕只写「摄像头不只是看」。
+    把口播全文压成字幕条有两个问题：
+      ① 画面上已经有大标题，两套文字打架，看着乱；
+      ② 字幕一秒切两三次，观众眼睛一直在跳。
 
-对齐办法：原文按标点切成短句，按累计字数比例映射到 whisper 的起止区间。
-TTS 语速均匀，这个映射的误差在 0.3s 内，肉眼看不出。
+**为什么时间按幕给，不按字数比例**：
+    字数比例 ≠ 真实语速（数字、英文、标点的读法差很多），
+    实测会出现字幕和语音差半句。幕起止来自 whisper 时间戳（timeline.json），
+    是真实语音时间。
 
 用法：
     ./subs.py
+输入：
+    cues.txt       10 行，每幕一句（和 index.html 的幕数一致）
+    timeline.json  align.py 生成的幕起止
+输出：
+    subs.json + 注入 index.html 的 // <SUBS> 块
 """
 import json
 import pathlib
@@ -17,100 +28,48 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-MAX_CHARS = 22          # 单行上限
-MIN_CHARS = 5           # 太短的并到下一句，避免闪一下
-
-
-def clean(s):
-    return re.sub(r"\s+", "", s)
-
-
-def split_units(text):
-    """句号优先：一句话就是一行字幕，只有超长才按逗号拆。
-
-    按逗号切会把「关不掉，也删不掉。」拆成两段，再合并时又跟上一句粘在一起，
-    出现「你每次真的看完了吗？关不掉，」这种跨句字幕（实测）。
-    """
-    units = []
-    for sent in re.split(r"(?<=[。？！])", clean(text)):
-        sent = sent.strip()
-        if not sent:
-            continue
-        if len(sent) <= MAX_CHARS:
-            units.append(sent)
-            continue
-        for p in re.split(r"(?<=[，、；：])", sent):
-            p = p.strip()
-            if not p:
-                continue
-            while len(p) > MAX_CHARS:
-                cut = max(p.rfind("，", 0, MAX_CHARS), p.rfind("、", 0, MAX_CHARS))
-                if cut <= 2:
-                    cut = MAX_CHARS
-                units.append(p[:cut + 1])
-                p = p[cut + 1:]
-            if p:
-                units.append(p)
-    return units
-
-
-def merge_short(units):
-    """把过短的句并到前一句，避免字幕一闪而过。"""
-    out = []
-    for u in units:
-        if out and len(clean(u)) < MIN_CHARS and len(clean(out[-1]) + clean(u)) <= MAX_CHARS:
-            out[-1] = out[-1] + u
-        elif out and len(clean(u)) < MIN_CHARS:
-            out.append(u)          # 并不上就单独留
-        else:
-            out.append(u)
-    return out
+ORDER = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"]
+MAX_CHARS = 26          # 单行上限（英文/数字视觉窄，比纯中文放宽）
 
 
 def main():
-    txt = (HERE / "speak.txt").read_text(encoding="utf-8").strip()
-    jf = HERE / "speak.json"
-    if not jf.exists():
-        print("缺 speak.json（先跑 whisper）", file=sys.stderr)
-        return 2
-    segs = json.loads(jf.read_text(encoding="utf-8")).get("segments") or []
-    if not segs:
-        print("speak.json 没有 segments", file=sys.stderr)
+    cues = [l.strip() for l in (HERE / "cues.txt").read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    tl = json.loads((HERE / "timeline.json").read_text(encoding="utf-8"))
+    spans = tl["spans"]
+
+    if len(cues) != len(ORDER):
+        print("cues.txt 有 %d 行，但幕有 %d 个 —— 必须一一对应" % (len(cues), len(ORDER)),
+              file=sys.stderr)
         return 2
 
-    total_audio = segs[-1]["end"]
-    units = merge_short(split_units(txt))
-    n_chars = sum(len(clean(u)) for u in units)
-
-    rows, cum = [], 0
-    for u in units:
-        c = len(clean(u))
-        s = total_audio * (cum / n_chars)
-        cum += c
-        e = total_audio * (cum / n_chars)
-        rows.append({"s": round(s, 2), "e": round(e, 2), "t": u})
+    rows = []
+    for k, txt in zip(ORDER, cues):
+        if k not in spans:
+            print("timeline.json 里没有 %s" % k, file=sys.stderr)
+            return 3
+        s, e = spans[k]
+        if len(txt) > MAX_CHARS:
+            print("  ⚠ %s 字幕 %d 字，超过 %d：%s" % (k, len(txt), MAX_CHARS, txt))
+        # 幕尾留 0.25s 空档，避免和下一幕字幕粘连
+        rows.append([round(s + 0.06, 2), round(max(s + 0.5, e - 0.25), 2), txt])
 
     (HERE / "subs.json").write_text(
         json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # 注入 index.html
+    payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
+    block = "// <SUBS>\nconst SUBS = %s;\n// </SUBS>" % payload
     html = HERE / "index.html"
     src = html.read_text(encoding="utf-8")
-    payload = json.dumps([[r["s"], r["e"], r["t"]] for r in rows],
-                         ensure_ascii=False, separators=(",", ":"))
-    block = "// <SUBS>\nconst SUBS = %s;\n// </SUBS>" % payload
-    src2 = re.sub(r"// <SUBS>.*?// </SUBS>", lambda m: block, src, flags=re.S)
-    if src2 == src and "// <SUBS>" not in src:
-        print("  ! index.html 里没有 // <SUBS> 占位块", file=sys.stderr)
+    out = re.sub(r"// <SUBS>.*?// </SUBS>", lambda m: block, src, flags=re.S)
+    if out == src and "// <SUBS>" not in src:
+        print("index.html 里没有 // <SUBS> 占位块", file=sys.stderr)
         return 3
-    html.write_text(src2, encoding="utf-8")
+    html.write_text(out, encoding="utf-8")
 
-    print("  %d 行字幕 / 原文 %d 字 / 语音 %.2fs" % (len(rows), n_chars, total_audio))
-    for r in rows[:6]:
-        print("  %5.2f-%5.2f  %s" % (r["s"], r["e"], r["t"]))
-    print("  …")
-    for r in rows[-3:]:
-        print("  %5.2f-%5.2f  %s" % (r["s"], r["e"], r["t"]))
+    print("  %d 幕字幕：" % len(rows))
+    for r in rows:
+        print("  %6.2f-%6.2f  %s" % (r[0], r[1], r[2]))
     print("  → subs.json，已注入 index.html")
     return 0
 
