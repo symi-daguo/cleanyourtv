@@ -15,7 +15,11 @@ import urllib.request
 HERE = pathlib.Path(__file__).resolve().parent
 API = "https://api.minimaxi.com/v1/t2a_v2"
 MODEL = "speech-2.8-hd"
-VOICE = "voice19_2026"
+# 大锅本人的音色。config.json 里只有两个角色：
+#   voice19_2026  19 号女声（克隆，同事）
+#   wgqvoice2026  亖米大锅（本人，男声，克隆）  ← 对外片子用这个
+# 之前几版全用了 19 号，等于拿同事的声音当自己的作品发。
+VOICE = "wgqvoice2026"
 SPEED = 1.05
 
 KEYS = [
