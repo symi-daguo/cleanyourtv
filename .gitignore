@@ -30,6 +30,7 @@ promo/*.mp4
 promo/frames/
 promo/beats/*.mp3
 promo/beats/beats.json
+promo/*.mp3
 
 # 本地工作记忆与渲染产物，不进公开仓库
 .workbuddy/
