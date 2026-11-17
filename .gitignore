@@ -17,6 +17,9 @@ traces/
 # Generated install bundles and JVM crash reports stay out of contributions.
 *.apk
 *.aab
+# The two release APKs are the deliverable of the Chinese skill, so they are kept even though *.apk is
+# ignored: the skill's download links point at them.
+!skills/cleanyourtv-cn/dist/*.apk
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
 demo-material/
