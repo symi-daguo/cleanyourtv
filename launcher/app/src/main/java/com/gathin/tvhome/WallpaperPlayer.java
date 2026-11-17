@@ -524,8 +524,10 @@ final class WallpaperPlayer {
             if (decoded == null) return null;
             if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
             // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
-            // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
-            Bitmap gpu = decoded.copy(Bitmap.Config.HARDWARE, false);
+            // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU. Compat.hardwareConfig
+            // hands back the software config below API 26, where the HARDWARE constant does not exist - and
+            // NoSuchFieldError is an Error, so the catch below would not have saved it.
+            Bitmap gpu = decoded.copy(Compat.hardwareConfig(), false);
             if (gpu == null) return decoded;
             decoded.recycle();
             return gpu;

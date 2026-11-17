@@ -35,8 +35,7 @@ final class GuardKeep {
     }
 
     static boolean offInStandby(Context context) {
-        UserManager users = context.getSystemService(UserManager.class);
-        if (users != null && !users.isUserUnlocked()) return false;
+        if (!Compat.isUserUnlocked(context)) return false;
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_OFF, false);
     }
 
