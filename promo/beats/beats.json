@@ -1,0 +1,51 @@
+[
+  {
+    "name": "01-hook",
+    "plan": 6,
+    "actual": 4.42,
+    "chars": 23,
+    "audio": "01-hook.mp3"
+  },
+  {
+    "name": "02-what",
+    "plan": 11,
+    "actual": 10.16,
+    "chars": 55,
+    "audio": "02-what.mp3"
+  },
+  {
+    "name": "03-android6",
+    "plan": 9.5,
+    "actual": 8.32,
+    "chars": 56,
+    "audio": "03-android6.mp3"
+  },
+  {
+    "name": "04-wallpaper",
+    "plan": 9,
+    "actual": 5.64,
+    "chars": 32,
+    "audio": "04-wallpaper.mp3"
+  },
+  {
+    "name": "05-detail",
+    "plan": 10,
+    "actual": 8.13,
+    "chars": 47,
+    "audio": "05-detail.mp3"
+  },
+  {
+    "name": "06-proof",
+    "plan": 13.5,
+    "actual": 12.6,
+    "chars": 60,
+    "audio": "06-proof.mp3"
+  },
+  {
+    "name": "07-end",
+    "plan": 6,
+    "actual": 4.63,
+    "chars": 23,
+    "audio": "07-end.mp3"
+  }
+]

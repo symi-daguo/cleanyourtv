@@ -587,6 +587,7 @@
          quiet as the still picture: with no clips there is nothing to play. -->
     <bool name="screensaver_video">true</bool>
 
-    <!-- How long one video stays before another is picked, in minutes. -->
-    <integer name="video_rotation_minutes">60</integer>
+    <!-- How long one video stays before another is picked, in minutes. The clips are short, so five minutes
+         gives the room some variety without the picture changing under the family. -->
+    <integer name="video_rotation_minutes">5</integer>
 </resources>

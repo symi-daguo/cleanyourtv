@@ -147,6 +147,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private WallpaperPlayer wallpaperPlayer;
     /** A muted landscape video behind Home (config.xml video_wallpaper); null when off or there are no clips. */
     private VideoLayer videoLayer;
+    /** The theme's background colour, kept aside while a video layer holds the root's background. */
+    private int backgroundColor;
     private GlassView glass;
     private View ambient;
     private TextView heroName;
@@ -516,9 +518,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().setBackgroundDrawable(null);
         int beforeWallpaper = root.getChildCount();
         wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
-        // Above the still picture (which stays on screen until the first video frame), below the UI.
+        // Above the still picture (which stays on screen until the first video frame), below the UI. The layer
+        // is a SurfaceView: its surface sits behind this window, so the window must leave its own pixels
+        // transparent there - one opaque background fill over the whole root and the video is invisible.
         videoLayer = VideoLayer.attach(this, root, root.getChildCount() - beforeWallpaper,
-                "video_wallpaper", cfg.videoWallpaper, cfg.videoDim, cfg.videoRotationMinutes);
+                "video_wallpaper", cfg.videoWallpaper, cfg.videoDim, cfg.videoRotationMinutes,
+                wallpaperPlayer::releasePicture, this::videoGaveUp);
+        if (videoLayer != null) {
+            root.setBackground(null);
+            backgroundColor = cfg.backgroundColor;   // kept for the day the layer gives up
+        }
         // The video covers the picture: the drift under it would only burn frames.
         wallpaperPlayer.setMotionBlocked(videoLayer != null);
         sky = findViewById(R.id.sky);
@@ -1182,6 +1191,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             settingsRevision = settingsRevision();
             recreate();
         }
+    }
+
+    /**
+     * Every clip failed and the layer has taken itself down. The window painted nothing over the video while
+     * it was up, so the plain colour comes back here, and the picture with it: start() reloads when it finds
+     * no bitmap on screen, which is the state releasePicture left.
+     */
+    private void videoGaveUp() {
+        runOnUiThread(() -> {
+            videoLayer = null;
+            root.setBackgroundColor(backgroundColor);
+            wallpaperPlayer.setMotionBlocked(false);
+            wallpaperPlayer.start();
+        });
     }
 
     private void startPendingSettingsReorder() {

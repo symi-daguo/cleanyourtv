@@ -219,6 +219,19 @@ final class WallpaperPlayer {
         else if (active) startMotion();
     }
 
+    /**
+     * Lets the picture go when a video layer has taken the screen. The bitmap is one copy in GPU memory and
+     * the video's decoder is another buffer; keeping both costs a few megabytes on a set with 1 GB of RAM for
+     * something nobody can see.
+     */
+    void releasePicture() {
+        image.removeCallbacks(this::stepDrift);
+        if (current == null) return;
+        image.setImageDrawable(null);
+        current = null;
+        displayed = "";
+    }
+
     /** True when a picture is on screen; Home uses it to keep the glow out of the way of a photo. */
     boolean hasPicture() {
         return current != null;
@@ -458,6 +471,9 @@ final class WallpaperPlayer {
     private static final long BUILTIN_INTERVAL_MS = 60_000L;
 
     private void advanceBuiltin() {
+        // A video layer covers the screen; re-decoding a bundled picture would only paint the window opaque
+        // over it and cost a few megabytes for something nobody can see.
+        if (motionBlocked) return;
         if (builtinAssets.size() < 2) return;
         long changed = preferences.getLong("changed", 0);
         if (!WallpaperRotation.due(changed, System.currentTimeMillis(), BUILTIN_INTERVAL_MS)) return;
