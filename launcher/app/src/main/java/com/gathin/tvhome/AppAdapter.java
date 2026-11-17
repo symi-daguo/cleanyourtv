@@ -220,13 +220,13 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final Map<String, String> appLabels, appBanners;
     /** Every app tile is its icon on a card tinted from that icon, never its banner (config.xml, uniform_tiles). */
     private final boolean uniformTiles;
+    /** Packages drawn from their icon and name even when they have a banner (config.xml icon_tiles). */
+    private final Set<String> iconTiles;
     /** Opacity of the card behind a tile, 100 = the solid card (config.xml, tile_opacity). */
     private final int tileOpacity;
     /** Foreground time per package over the last month; empty when the grant is missing, which leaves the
      *  grid alphabetical exactly as before. */
     private final Map<String, Long> usage = new HashMap<>();
-    /** Packages drawn from their icon and name even when they have a banner (config.xml icon_tiles). */
-    private final Set<String> iconTiles;
     private final List<Entry> items = new ArrayList<>();
 
     AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
@@ -530,6 +530,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             h.card.setBackground(glass);
         }
         if (e.banner != null) {
+            h.icon.setImageDrawable(null);
             h.banner.setImageDrawable(e.banner);
             h.banner.setVisibility(View.VISIBLE);
             h.icon.setVisibility(View.GONE);

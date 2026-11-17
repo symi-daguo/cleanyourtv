@@ -30,7 +30,7 @@ https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@main/skills/cleanyourtv-cn/SK
 ### 如果发现拿到的包不是最新的
 
 jsdelivr 对 `@main` 有缓存，而且对 `.apk` 这种大文件尤其顽固：实测两轮 purge 之后 min26 仍然返回上一版，
-同一时刻用固定 commit 地址去拉就是新的。**遇到"文档说 519 KB、实际下下来大小不对"，用 commit 地址**：
+同一时刻用固定 commit 地址去拉就是新的。**遇到"文档说 579 KB、实际下下来大小不对"，用 commit 地址**：
 
 ```
 https://cdn.jsdelivr.net/gh/symi-daguo/cleanyourtv@<commit>/skills/cleanyourtv-cn/dist/cleanyourtv-cn-min26.apk
@@ -107,17 +107,23 @@ bash verify.sh <电视IP>
 
 ## 版本基线
 
-基于上游 **v3.4.0**（`versionCode 13` / `versionName 3.4`）重建，保留了官方仍然没有的部分：
+基于上游 **v3.5.0**（`versionCode 14` / `versionName 3.5`）重建，保留了官方仍然没有的部分：
 
 | 本分支提供 | 原因 |
 |---|---|
 | `-PlauncherMinSdk=23` 的 Android 6.0 包 | 官方最低 Android 8.0 |
 | 包内 5 张背景图（`src/min23/assets`） | 外部存储被裁掉的机器推不进照片 |
 | `wallpaper_motion` 动态背景 | 官方没有 |
+| **`video_wallpaper` 视频背景** | 官方没有 |
+| **`screensaver_video` 待机屏视频** | 官方没有 |
 | `tile_opacity` 卡片半透明 | 官方没有 |
 | 按使用频率排序 | 官方没有 |
 
-官方已经有的（`dock_band`、`ambient_glow`、`power_on_home`、换图间隔容差、v3.4 新增的 15 个键）一律用官方的。
+官方已经有的（`dock_band`、`ambient_glow`、`power_on_home`、换图间隔容差、`dock_opacity`、v3.4/v3.5 新增的键）一律用官方的。
+
+> 视频背景这个功能，官方**没有**；GitHub 上 `anouarzerdeb/android-tv-custom-launcher` 是同一个上游仓库的 fork，
+> 第一个做出了「上传视频当桌面背景」。本分支把它的做法收进来，并按本分支的方式重写：键放在 `config.xml`，
+> 片源目录外部存储优先、没有外部存储时用应用自己的私有目录。
 
 ## 先确认三件事
 
@@ -151,8 +157,8 @@ skills/cleanyourtv-cn/scripts/uninstall.sh 192.168.1.50
 
 | 电视的 SDK | 下哪个包 | 对应构建 |
 |---|---|---|
-| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，576 KB | 默认 `minSdk 26` |
-| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，1278 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
+| ≥ 26（Android 8.0+） | `cleanyourtv-cn-min26.apk`，579 KB | 默认 `minSdk 26` |
+| 23–25（Android 6.0–7.1） | `cleanyourtv-cn-min23.apk`，1283 KB | `-PlauncherMinSdk=<SDK>` + `coreLibraryDesugaring` |
 | < 23 | 不下载 | 直接拒绝，这个桌面编不出来 |
 
 下载缓存在 `~/.cache/cleanyourtv/`，同一台机器第二次装不再重新下。GitHub 慢的时候可以换镜像：`CLEANYOURTV_APK_URL=<你的镜像地址>`。
@@ -232,6 +238,55 @@ skills/cleanyourtv-cn/scripts/set-wallpaper.sh ~/Pictures/家庭照片 192.168.1
 
 `set-wallpaper.sh` 会先探测外部存储，遇到这种机器直接说明原因，不会推一屏错误。
 
+## 把视频做成桌面背景
+
+桌面背景可以是一段循环播放的视频，也可以是照片——**两个可以同时用**：照片铺底，视频层盖在上面。
+
+**片源放哪里**
+
+| 机器 | 目录 |
+|---|---|
+| 普通电视（外部存储正常） | 主题文件夹下的 `videos/`，和 `config.json`、`wallpapers/` 放在一起 |
+| 海信 VIDAA 这类（外部存储被裁掉） | 应用私有目录 `/data/data/com.gathin.tvhome/files/videos/` |
+
+**放进私有目录（海信这类机器）**
+
+```bash
+adb push 风景.mp4 /data/local/tmp/
+adb shell "mkdir -p /data/data/com.gathin.tvhome/files/videos"
+adb shell "cp /data/local/tmp/风景.mp4 /data/data/com.gathin.tvhome/files/videos/"
+```
+
+**支持的格式**：`.mp4` `.webm` `.mkv` `.m4v`，单个不超过 200 MB。静音播放，循环，不会和外放串音。
+
+**可调的键**（在 `launcher/app/src/main/res/values/config.xml`，或主题的 `config.json` 里覆盖同名项）
+
+| 键 | 默认 | 作用 |
+|---|---|---|
+| `video_wallpaper` | true | 桌面用视频当背景 |
+| `screensaver_video` | true | 待机屏（时钟）下面也放视频 |
+| `video_dim` | 0 | 视频压暗多少，0-90，网格文字看不清时调它 |
+| `video_rotation_minutes` | 60 | 一段视频播多久换下一段（随机换） |
+
+**没有视频时不会有任何开销**：找不到片源就不挂这一层，桌面还是原来的照片。这一点很重要——默认是开的，
+但一台没推过视频的电视，内存和耗电跟没这个功能一样。
+
+**实测（海信 VIDAA，1920×1080，maxim 芯片，连续运行 3 分钟）**
+
+| | 静态照片背景 | 视频背景 |
+|---|---|---|
+| 帧率 | 约 30 fps | 约 20 fps |
+| 掉帧 | 0.67% | 3.28% |
+| 95% 帧时间 | 11 ms | 15 ms |
+| 内存 | 28.2 MB | 31.8 MB |
+| 崩溃 | 0 | 0 |
+
+视频比照片多占约 3.6 MB 内存，掉帧从 0.67% 涨到 3.28%——这是硬件解码的成本，在这类低端芯片上可以接受。
+应用切到前台时解码器会立刻释放，不会占着电视的解码资源。
+
+**视频开着的时候，照片的漂移动画会自动停掉。** 照片被视频完全盖住，再让照片在下面每帧做变换就是白烧帧：
+实测这一项在 3 分钟里把掉帧从 3.28% 拉到 15.25%，改掉之后回到 3.28%。
+
 ## 老电视上的性能实测
 
 在**海信 VIDAA（maxim 芯片，Android 6）**上测过一组数，判断"卡不卡"时可以直接对照：
@@ -243,7 +298,7 @@ skills/cleanyourtv-cn/scripts/set-wallpaper.sh ~/Pictures/家庭照片 192.168.1
 | 掉帧率 | **1.6%** | |
 | 内存占用 | **24 MB** | |
 | 崩溃 | 0 | |
-| APK 体积 | min26 **576 KB** / min23 **1278 KB** | min23 大是因为带了 java.time 与 lambda 的脱敏库 |
+| APK 体积 | min26 **579 KB** / min23 **1283 KB** | min23 大是因为带了 java.time 与 lambda 的脱敏库 |
 
 **这台机器有一个改不掉的毛病**：帧时间线上每约 11 帧就有一次 **133 ms** 的空洞。实测**把我们的动画整个关掉，这个空洞照样在**，
 所以它来自这颗 maxim 芯片和海信系统本身，不是背景动画造成的。壁纸能做到的只是让空洞看不出来 —— 位移小到一帧 0.2 像素。

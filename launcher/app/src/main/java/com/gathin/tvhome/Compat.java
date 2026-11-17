@@ -6,7 +6,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.media.tv.TvInputInfo;
-import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
 import android.net.ConnectivityManager;
 import android.os.Build;
@@ -23,17 +22,23 @@ import java.util.Locale;
  * branch below is the call the launcher already made. They exist so that {@code -PlauncherMinSdk=23}
  * can build the same source for older sets (Hisense VIDAA, Android 6.0), where the plain call is a
  * NoSuchMethodError at startup rather than a warning.
+ *
+ * <p>Every level below was read out of the SDK's own api-versions.xml, not from memory: two of them were
+ * wrong when this file was written ({@code forceHasOverlappingRendering} is API 24, not 29, and
+ * {@code getChangedPackages} is API 26, not 24), and the upstream reviewer caught the first one.
  */
 final class Compat {
     private Compat() {}
 
-    /** {@code View#forceHasOverlappingRendering}, API 29 (Android 10): below it the flag does not exist and the
-     *  view keeps drawing through an offscreen buffer. A slower fade, not a broken one. Upstream calls it
-     *  unguarded, which its own minSdk 26 does not excuse either - on a set below Android 10 the call lands on
-     *  a method that is not there and the launcher dies in onCreate with
-     *  "NoSuchMethodError: forceHasOverlappingRendering". */
+    /** {@code View#forceHasOverlappingRendering}, API 24 (Android 7.0): below it the flag does not exist and the
+     *  view keeps drawing through an offscreen buffer. A slower fade, not a broken one.
+     *
+     *  The level was wrong here first (it said 29) and the upstream reviewer caught it: the method has been public
+     *  since Android 7, and the SDK's own api-versions.xml lists it as since="24". Guarding it at 29 would have
+     *  thrown away the drawing hint on Android 8 and 9 for nothing. The level of every call in this file was then
+     *  read off that file rather than from memory. */
     static void noOverlappingRendering(View view) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) view.forceHasOverlappingRendering(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) view.forceHasOverlappingRendering(false);
     }
 
     /** {@code UserManager#isUserUnlocked}, API 24. Before 7.0 there is no direct-boot storage, so the user is
@@ -81,10 +86,13 @@ final class Compat {
         manager.registerDefaultNetworkCallback(callback);
     }
 
-    /** {@code PackageManager#getChangedPackages}, API 24. Below it the manager cannot say what changed, so the
-     *  caller treats the grid as up to date and rebuilds it the slow way instead. */
+    /** {@code PackageManager#getChangedPackages}, API 26 (Android 8.0): below it the manager cannot say what
+     *  changed, so the caller treats the grid as up to date and rebuilds it the slow way instead.
+     *
+     *  This one is API 26, not 24 - api-versions.xml lists it as since="26". Guarding it at 24 would have left
+     *  Android 7.x calling a method that is not there. */
     static android.content.pm.ChangedPackages changedPackages(PackageManager manager, int sequence) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null;
         return manager.getChangedPackages(sequence);
     }
 

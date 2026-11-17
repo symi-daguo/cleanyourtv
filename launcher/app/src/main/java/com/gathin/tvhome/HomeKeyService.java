@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -38,6 +39,11 @@ import java.util.Set;
  *
  * With power_on_home set, a Live TV window (live_tv_package) that the firmware opens by itself at power-on is sent
  * back here too, until the first key press after boot or after the screen turns on (Changhong / Homwee boards).
+ * With power_on_home_always set, Home comes up at every power-on whatever is in front, for TVs that resume their
+ * last source: a Philips back on an HDMI input sends no window event until the input has a picture.
+ *
+ * With home_long_press_home set, it takes every Home press, so one held past the long-press timeout opens this launcher
+ * instead of Android's ALL_APPS action, which nothing answers once the stock launcher is disabled (Philips TPM191E).
  *
  * Enable over adb:
  *   settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeKeyService
@@ -51,6 +57,7 @@ public class HomeKeyService extends AccessibilityService {
     private int[] settingsScancodes = new int[0];
     private int[] settingsKeycodes = new int[0];
     private boolean settingsPanel;
+    private boolean settingsClearTask;
     /** consume_volume_keys: Volume Up/Down go to VolumeKeys instead of on to the firmware. */
     private boolean consumeVolumeKeys;
     /** app_keys, the same maps InputKeyService reads, for setups that run only this service. */
@@ -68,16 +75,23 @@ public class HomeKeyService extends AccessibilityService {
     /** power_on_home: the Live TV package to send back to Home, empty when off; armed until this uptime or a key. */
     private String powerOnLiveTv = "";
     private long powerOnUntil;
+    /** home_long_press_home: this service takes every Home press, held ones included. */
+    private boolean homeLongPressHome;
+    /** app_keys "front:" entries; the package in front goes to RemoteKeys.frontPackage, for both helpers. */
+    private Map<Integer, String> frontAppKeys = Collections.emptyMap();
+    private Map<Integer, String> frontAppScancodes = Collections.emptyMap();
+    /** power_on_home_always: Home at every power-on, not only over Live TV. */
+    private boolean powerOnAlways;
     /** power_on_home: re-arms after the screen turns on; null unless the key is on. */
     private BroadcastReceiver screenOnReceiver;
-    /** Stops key filtering while a game controller is connected; null unless gamepad_passthrough and key_filter, or before the unlock. */
+    /** Stops key filtering while a game controller is connected or after a volume change; null unless gamepad_passthrough or volume_pauses_filter, and key_filter, or before the unlock. */
     private GamepadPassthrough gamepads;
     /** Screen-off receiver while guard_off_in_standby is set; null otherwise. */
     private BroadcastReceiver standbyExit;
     /** disableSelf is how this service leaves for standby, not the user turning it off. */
     private boolean steppingOut;
     /** The bound helper, so the opt-in broadcast can arm it without waiting for a new connection. */
-    private static HomeKeyService running;
+    static HomeKeyService running;
 
     @Override
     protected void onServiceConnected() {
@@ -87,7 +101,8 @@ public class HomeKeyService extends AccessibilityService {
         // The service is directBootAware: Android 11 skips a service that is not while the user is still
         // locked at boot, writes accessibility_enabled=0 and, on TCL G03 firmware, never binds it after the
         // unlock. Config.load reads credential-protected storage, so wait for the unlock before reading it.
-        if (Compat.isUserUnlocked(this)) {
+        UserManager users = getSystemService(UserManager.class);
+        if (users.isUserUnlocked()) {
             loadConfig();
             return;
         }
@@ -100,7 +115,7 @@ public class HomeKeyService extends AccessibilityService {
         };
         registerReceiver(unlockReceiver, new IntentFilter(Intent.ACTION_USER_UNLOCKED));
         // The unlock may have happened between the check and the registration.
-        if (Compat.isUserUnlocked(this)) {
+        if (users.isUserUnlocked()) {
             stopWaitingForUnlock();
             loadConfig();
         }
@@ -123,6 +138,8 @@ public class HomeKeyService extends AccessibilityService {
     @Override
     public void onDestroy() {
         if (running == this) running = null;
+        RemoteKeys.frontPackage = "";
+        RemoteKeys.release(this);
         stopWaitingForUnlock();
         if (screenOnReceiver != null) unregisterReceiver(screenOnReceiver);
         if (standbyExit != null) {
@@ -175,10 +192,15 @@ public class HomeKeyService extends AccessibilityService {
         if (repairRecord) ServiceRepair.connected(this, getClass());
         settingsKeycodes = config.settingsKeycodes;
         settingsPanel = config.settingsKeyPanel;
+        settingsClearTask = config.settingsKeyClearTask;
         consumeVolumeKeys = config.consumeVolumeKeys;
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);
+        homeLongPressHome = config.homeLongPressHome;
+        frontAppKeys = RemoteKeys.parseFrontAppKeys(config.appKeys);
+        frontAppScancodes = RemoteKeys.parseFrontAppScancodes(config.appKeys);
+        boolean watchFront = !frontAppKeys.isEmpty() || !frontAppScancodes.isEmpty();
         stockHome.clear();
         stockHomePackage = config.stockHomeRedirect;
         if (!config.stockHomeRedirect.isEmpty()) {
@@ -193,7 +215,8 @@ public class HomeKeyService extends AccessibilityService {
                 ? getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getString(OpenOnStart.KEY, "") : "";
         powerOnLiveTv = config.powerOnHome && !config.bootToLiveTv && !config.liveTvPackage.equals(openOnStart)
                 ? config.liveTvPackage : "";
-        if (!powerOnLiveTv.isEmpty()) {
+        powerOnAlways = config.powerOnHomeAlways && !config.bootToLiveTv && openOnStart.isEmpty();
+        if (!powerOnLiveTv.isEmpty() || powerOnAlways) {
             armPowerOnHome();
         } else if (screenOnReceiver != null) {
             unregisterReceiver(screenOnReceiver);
@@ -202,24 +225,35 @@ public class HomeKeyService extends AccessibilityService {
         }
         // home_key_service.xml subscribes to no events, so the redirects ask for window changes only when one is on.
         AccessibilityServiceInfo info = getServiceInfo();
-        if (info != null && (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty())) {
+        if (info != null && (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty() || watchFront)) {
             info.eventTypes |= AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
             setServiceInfo(info);
+            // setServiceInfo() rewrites flags and drops the XML's flagRequestFilterKeyEvents, so a
+            // key_filter build that also uses a window-watching redirect loses key filtering (gear/app
+            // keys stop reaching the helper). Re-assert the filter flag here when key_filter is on.
+            if (config.keyFilter) info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
         }
         if (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty()) probeAtBoot();
         armStandbyExit();
         holdAppKeys = RemoteKeys.parseHoldAppKeys(config.appKeys);
         holdAppScancodes = RemoteKeys.parseHoldAppScancodes(config.appKeys);
-        // gamepad_passthrough, off by default. Only with key_filter on: off, the service never filters keys.
-        if (config.gamepadPassthrough && config.keyFilter && gamepads == null) {
-            gamepads = new GamepadPassthrough(this);
-            gamepads.start();
-        }
+        // gamepad_passthrough and volume_pauses_filter, off by default.
+        if (gamepads == null) gamepads = GamepadPassthrough.start(this, config);
+    }
+
+    /** A tap's target: the "front:" entry while the button's own app is already in front, else the usual one. */
+    private String inFront(Map<Integer, String> keys, Map<Integer, String> front, int code) {
+        return RemoteKeys.tap(keys.get(code), front.get(code));
+    }
+
+    private boolean isSettingsScancode(KeyEvent event) {
+        for (int code : settingsScancodes) if (event.getScanCode() == code) return true;
+        return false;
     }
 
     private boolean isSettingsKey(KeyEvent event) {
         if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) return true;
-        for (int code : settingsScancodes) if (event.getScanCode() == code) return true;
+        if (isSettingsScancode(event)) return true;
         for (int code : settingsKeycodes) if (event.getKeyCode() == code) return true;
         return false;
     }
@@ -233,13 +267,27 @@ public class HomeKeyService extends AccessibilityService {
         }
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.
-        if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),
+        if (RemoteKeys.handle(this, event, inFront(appScancodes, frontAppScancodes, event.getScanCode()),
                 holdAppScancodes.get(event.getScanCode()))) return true;
+        // A keycode app_keys entry with a tap target wins over the Settings keycodes (InputKeyService opens it too, and
+        // RemoteKeys answers a press once), but not over a button named in settings_key_scancodes. A hold-only entry
+        // leaves the tap to Settings and still runs its hold.
+        boolean settingsKey = isSettingsKey(event);
+        String tap = inFront(appKeys, frontAppKeys, event.getKeyCode());
+        String hold = holdAppKeys.get(event.getKeyCode());
+        if ((!settingsKey || (tap != null && !isSettingsScancode(event))) && RemoteKeys.handle(this, event, tap, hold)) {
+            return true;
+        }
         // The stock launcher handled the remote's Settings button; with it disabled the button does nothing.
-        if (isSettingsKey(event)) {
-            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+        if (settingsKey) {
+            RemoteKeys.handle(this, event, null, hold);
+            boolean held = hold != null && event.getEventTime() - event.getDownTime() >= RemoteKeys.HOLD_MS;
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled() && !held) {
                 Intent open = settingsPanel ? new Intent(this, QuickSettingsActivity.class)
                         : SystemSettings.intent(this, Settings.ACTION_SETTINGS);
+                // settings_key_clear_task: on MediaTek boards KEYCODE_SETTINGS is also a global key that opens Display &
+                // Sound in the Settings task before this helper sees it; cleared, Back from Settings goes Home, not there.
+                if (settingsClearTask && !settingsPanel) open.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 try {
                     startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 } catch (ActivityNotFoundException | SecurityException unavailable) {
@@ -248,8 +296,11 @@ public class HomeKeyService extends AccessibilityService {
             }
             return true;
         }
-        if (RemoteKeys.handle(this, event, appKeys.get(event.getKeyCode()),
-                holdAppKeys.get(event.getKeyCode()))) return true;
+        // home_long_press_home: Android never sees the Home key, so a held press cannot turn into ALL_APPS.
+        if (homeLongPressHome && event.getKeyCode() == KeyEvent.KEYCODE_HOME) {
+            if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) openHome();
+            return true;
+        }
         if (event.getKeyCode() == KeyEvent.KEYCODE_HOME && !stockHome.isEmpty()) {
             redirectHomeKey(event);
             return false;
@@ -262,6 +313,7 @@ public class HomeKeyService extends AccessibilityService {
     /** Unbound by Android: the user turned the helper off, so Home doesn't put it back (ServiceRepair). */
     @Override
     public boolean onUnbind(Intent intent) {
+        RemoteKeys.release(this);
         if (repairRecord && !steppingOut) ServiceRepair.disconnected(this, getClass());
         return super.onUnbind(intent);
     }
@@ -269,6 +321,17 @@ public class HomeKeyService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        // app_keys "front:" entries: only activities count, so a toast or the volume bar doesn't change the app in front.
+        if ((!frontAppKeys.isEmpty() || !frontAppScancodes.isEmpty())
+                && event.getPackageName() != null && event.getClassName() != null) {
+            try {
+                ComponentName window = new ComponentName(event.getPackageName().toString(), event.getClassName().toString());
+                getPackageManager().getActivityInfo(window, 0);
+                RemoteKeys.frontPackage = window.getPackageName();
+            } catch (PackageManager.NameNotFoundException notAnActivity) {
+                // a dialog, panel or overlay: the app under it is still in front
+            }
+        }
         // power_on_home: the firmware opened Live TV by itself at power-on, before anyone pressed a key.
         if (powerOnRedirect(powerOnLiveTv, event.getPackageName(), SystemClock.elapsedRealtime(), powerOnUntil)) {
             openHome();
@@ -284,15 +347,42 @@ public class HomeKeyService extends AccessibilityService {
 
     /** power_on_home: armed for the boot window (if this bind is part of the boot) and after every screen-on. */
     private void armPowerOnHome() {
-        if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS) powerOnUntil = BOOT_WINDOW_MS;
+        if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS) {
+            powerOnUntil = BOOT_WINDOW_MS;
+            if (powerOnAlways) handler.postDelayed(this::homeAtPowerOn, POWER_ON_ALWAYS_DELAY_MS);
+        }
         if (screenOnReceiver != null) return;
         screenOnReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 powerOnUntil = SystemClock.elapsedRealtime() + SCREEN_ON_WINDOW_MS;
+                if (powerOnAlways) handler.postDelayed(HomeKeyService.this::homeAtPowerOn, POWER_ON_ALWAYS_DELAY_MS);
             }
         };
         registerReceiver(screenOnReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+    }
+
+    /** power_on_home_always: after the firmware has brought its last source back (Philips: within 0.5 s). */
+    static final long POWER_ON_ALWAYS_DELAY_MS = 800L;
+
+    /** power_on_home_always: Home, unless a key was pressed since the screen came on (the user has the TV). */
+    private void homeAtPowerOn() {
+        if (stillArmed(SystemClock.elapsedRealtime(), powerOnUntil)) openHome();
+    }
+
+    static boolean stillArmed(long now, long armedUntil) {
+        return now < armedUntil;
+    }
+
+    /** The settings menu offers Restart only while this helper is bound: it opens the system power menu. */
+    static boolean canOpenPowerMenu() {
+        return running != null;
+    }
+
+    /** The system power menu (Restart, and Power off where the firmware has it); the TV asks before it acts. */
+    static void openPowerMenu() {
+        HomeKeyService service = running;
+        if (service != null) service.performGlobalAction(GLOBAL_ACTION_POWER_DIALOG);
     }
 
     static boolean powerOnRedirect(String liveTv, CharSequence pkg, long now, long armedUntil) {

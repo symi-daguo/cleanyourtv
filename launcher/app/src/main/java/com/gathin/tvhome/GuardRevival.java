@@ -19,7 +19,8 @@ public class GuardRevival extends NotificationListenerService {
 
     @Override
     public void onListenerConnected() {
-        if (!Compat.isUserUnlocked(this)) {
+        UserManager users = getSystemService(UserManager.class);
+        if (users != null && !users.isUserUnlocked()) {
             if (unlocked != null) return;
             unlocked = new BroadcastReceiver() {
                 @Override
@@ -29,7 +30,7 @@ public class GuardRevival extends NotificationListenerService {
                 }
             };
             registerReceiver(unlocked, new IntentFilter(Intent.ACTION_USER_UNLOCKED));
-            if (Compat.isUserUnlocked(this)) {
+            if (users.isUserUnlocked()) {
                 stopWaiting();
                 GuardKeep.ensureHomeKey(this);
             }

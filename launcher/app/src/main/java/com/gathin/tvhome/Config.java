@@ -138,6 +138,8 @@ final class Config {
     final boolean backOpensClock;
     /** The ambient glow takes a new app's colour in one frame instead of dipping and fading (config.xml / theme glow_snap). */
     final boolean glowSnap;
+    /** The remote's Settings button clears the TV Settings task before opening it (config.xml / theme settings_key_clear_task). */
+    final boolean settingsKeyClearTask;
     /** App library as a round button in the top bar (config.xml library_button); needs app_library. */
     final boolean libraryButton;
     /** The App library pill after the last Home row; false hides it while libraryButton is on (show_library_pill). */
@@ -179,6 +181,10 @@ final class Config {
     final boolean gamepadPassthrough;
     /** With keyFilter on, the key services swallow Volume Up/Down and repeat a held one themselves (consume_volume_keys). */
     final boolean consumeVolumeKeys;
+    /** With keyFilter on, a volume change stops the key services filtering for a few seconds (volume_pauses_filter). */
+    final boolean volumePausesFilter;
+    /** Channel Up/Down do nothing while Home is in front, instead of opening the TV's Live TV app. */
+    final boolean homeIgnoreChannelKeys;
     /** Stock launcher whose home screen is sent back here if the firmware revives it (config.xml stock_home_redirect). */
     final String stockHomeRedirect;
     /** A Live TV window the firmware opens by itself at power-on is sent back to Home (power_on_home). */
@@ -205,12 +211,20 @@ final class Config {
     final List<File> wallpapers;
     final int wallpaperRotationMinutes;
     final int wallpaperDim;
-    /** Opacity of the card behind an app tile, 0 to 100 percent (config.xml, tile_opacity); 100 is the solid card. */
-    final int tileOpacity;
-    /** Slow Ken Burns zoom and drift on a wallpaper (config.xml, wallpaper_motion); false leaves the picture still. */
-    final boolean wallpaperMotion;
     /** The dock band's opacity in percent (config.json dock_opacity, 30-100): below 100 the wallpaper shows through. */
     final int dockOpacity;
+    /** Slow Ken Burns drift on the wallpaper (config.xml wallpaper_motion): false leaves the picture still. */
+    final boolean wallpaperMotion;
+    /** Opacity of the card behind an app tile, 0 to 100 percent (config.xml tile_opacity); 100 is the solid card. */
+    final int tileOpacity;
+    /** A muted video behind Home instead of the still picture (config.xml video_wallpaper). */
+    final boolean videoWallpaper;
+    /** A muted video behind the screensaver's clock (config.xml screensaver_video). */
+    final boolean screensaverVideo;
+    /** How dark the video is behind the grid, 0 to 90 percent (config.xml video_dim). */
+    final int videoDim;
+    /** How long one video stays before another is picked (config.xml video_rotation_minutes). */
+    final int videoRotationMinutes;
     /**
      * Playback order for a wallpaper collection: {@code sequential} or {@code shuffle}. Missing or
      * invalid values keep the historical shuffle so existing themes rotate exactly as before.
@@ -295,8 +309,10 @@ final class Config {
                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, boolean appGlow, boolean fadeRows, int homeIdleClockMinutes,
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
-                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly, boolean inputsCecStateOnly,
-                   int openOnStartNetworkWait, boolean openOnStartOnWake, boolean iconOnlyVpn, String clockFormat, boolean backOpensClock, boolean glowSnap, int tileOpacity, boolean wallpaperMotion) {
+                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean volumePausesFilter, boolean homeIgnoreChannelKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly, boolean inputsCecStateOnly,
+                   int openOnStartNetworkWait, boolean openOnStartOnWake, boolean iconOnlyVpn, String clockFormat, boolean backOpensClock, boolean glowSnap,
+                   boolean settingsKeyClearTask, boolean wallpaperMotion, int tileOpacity, boolean videoWallpaper,
+                   boolean screensaverVideo, int videoDim, int videoRotationMinutes) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -348,6 +364,7 @@ final class Config {
         this.iconOnlyVpn = iconOnlyVpn;
         this.backOpensClock = backOpensClock;
         this.glowSnap = glowSnap;
+        this.settingsKeyClearTask = settingsKeyClearTask;
         this.libraryButton = libraryButton;
         this.showLibraryPill = showLibraryPill;
         this.wifiLabelWidth = wifiLabelWidth;
@@ -372,9 +389,13 @@ final class Config {
         this.wallpapers = Collections.unmodifiableList(wallpapers);
         this.wallpaperRotationMinutes = wallpaperRotationMinutes;
         this.wallpaperDim = wallpaperDim;
-        this.tileOpacity = tileOpacity;
-        this.wallpaperMotion = wallpaperMotion;
         this.dockOpacity = dockOpacity;
+        this.wallpaperMotion = wallpaperMotion;
+        this.tileOpacity = tileOpacity;
+        this.videoWallpaper = videoWallpaper;
+        this.screensaverVideo = screensaverVideo;
+        this.videoDim = videoDim;
+        this.videoRotationMinutes = videoRotationMinutes;
         this.wallpaperOrder = wallpaperOrder;
         this.overlayApplied = overlayApplied;
         this.festival = festival;
@@ -395,6 +416,8 @@ final class Config {
         this.wallpaperMoods = wallpaperMoods;
         this.gamepadPassthrough = gamepadPassthrough;
         this.consumeVolumeKeys = consumeVolumeKeys;
+        this.volumePausesFilter = volumePausesFilter;
+        this.homeIgnoreChannelKeys = homeIgnoreChannelKeys;
         this.powerOnHome = powerOnHome;
         this.homeLongPressHome = homeLongPressHome;
         this.powerOnHomeAlways = powerOnHomeAlways;
@@ -481,11 +504,19 @@ final class Config {
         boolean iconOnlyVpn = res.getBoolean(R.bool.icon_only_vpn);
         boolean backOpensClock = res.getBoolean(R.bool.back_opens_clock);
         boolean glowSnap = res.getBoolean(R.bool.glow_snap);
+        boolean settingsKeyClearTask = res.getBoolean(R.bool.settings_key_clear_task);
         boolean libraryButton = res.getBoolean(R.bool.library_button);
         boolean showLibraryPill = res.getBoolean(R.bool.show_library_pill);
         int wifiLabelWidth = res.getInteger(R.integer.wifi_label_width);
         boolean alwaysShowNames = res.getBoolean(R.bool.always_show_names);
         boolean wallpaperTrueColor = res.getBoolean(R.bool.wallpaper_true_color);
+        int wallpaperDim = res.getInteger(R.integer.wallpaper_dim);
+        boolean wallpaperMotion = res.getBoolean(R.bool.wallpaper_motion);
+        int tileOpacity = res.getInteger(R.integer.tile_opacity);
+        boolean videoWallpaper = res.getBoolean(R.bool.video_wallpaper);
+        boolean screensaverVideo = res.getBoolean(R.bool.screensaver_video);
+        int videoDim = res.getInteger(R.integer.video_dim);
+        int videoRotationMinutes = res.getInteger(R.integer.video_rotation_minutes);
         boolean focusOvershoot = res.getBoolean(R.bool.focus_overshoot);
         boolean wallpaperCaptions = res.getBoolean(R.bool.wallpaper_captions);
         boolean tileMenu = res.getBoolean(R.bool.tile_menu);
@@ -514,6 +545,8 @@ final class Config {
         boolean keyFilter = res.getBoolean(R.bool.key_filter);
         boolean gamepadPassthrough = res.getBoolean(R.bool.gamepad_passthrough);
         boolean consumeVolumeKeys = res.getBoolean(R.bool.consume_volume_keys);
+        boolean volumePausesFilter = res.getBoolean(R.bool.volume_pauses_filter);
+        boolean homeIgnoreChannelKeys = res.getBoolean(R.bool.home_ignore_channel_keys);
         boolean powerOnHome = res.getBoolean(R.bool.power_on_home);
         boolean homeLongPressHome = res.getBoolean(R.bool.home_long_press_home);
         boolean powerOnHomeAlways = res.getBoolean(R.bool.power_on_home_always);
@@ -595,11 +628,19 @@ final class Config {
             iconOnlyVpn = bool(json, "icon_only_vpn", iconOnlyVpn);
             backOpensClock = bool(json, "back_opens_clock", backOpensClock);
             glowSnap = bool(json, "glow_snap", glowSnap);
+            settingsKeyClearTask = bool(json, "settings_key_clear_task", settingsKeyClearTask);
             libraryButton = bool(json, "library_button", libraryButton);
             showLibraryPill = bool(json, "show_library_pill", showLibraryPill);
             wifiLabelWidth = integer(json, "wifi_label_width", wifiLabelWidth, 0, 300);
             alwaysShowNames = bool(json, "always_show_names", alwaysShowNames);
             wallpaperTrueColor = bool(json, "wallpaper_true_color", wallpaperTrueColor);
+            wallpaperDim = integer(json, "wallpaper_dim", wallpaperDim, 0, 90);
+            wallpaperMotion = bool(json, "wallpaper_motion", wallpaperMotion);
+            tileOpacity = integer(json, "tile_opacity", tileOpacity, 0, 100);
+            videoWallpaper = bool(json, "video_wallpaper", videoWallpaper);
+            screensaverVideo = bool(json, "screensaver_video", screensaverVideo);
+            videoDim = integer(json, "video_dim", videoDim, 0, 90);
+            videoRotationMinutes = integer(json, "video_rotation_minutes", videoRotationMinutes, 1, 1440);
             focusOvershoot = bool(json, "focus_overshoot", focusOvershoot);
             wallpaperCaptions = bool(json, "wallpaper_captions", wallpaperCaptions);
             tileMenu = bool(json, "tile_menu", tileMenu);
@@ -628,6 +669,8 @@ final class Config {
             keyFilter = bool(json, "key_filter", keyFilter);
             gamepadPassthrough = bool(json, "gamepad_passthrough", gamepadPassthrough);
             consumeVolumeKeys = bool(json, "consume_volume_keys", consumeVolumeKeys);
+            volumePausesFilter = bool(json, "volume_pauses_filter", volumePausesFilter);
+            homeIgnoreChannelKeys = bool(json, "home_ignore_channel_keys", homeIgnoreChannelKeys);
             powerOnHome = bool(json, "power_on_home", powerOnHome);
             homeLongPressHome = bool(json, "home_long_press_home", homeLongPressHome);
             powerOnHomeAlways = bool(json, "power_on_home_always", powerOnHomeAlways);
@@ -678,9 +721,6 @@ final class Config {
         boolean wallpaperEnabled = json == null || bool(json, "wallpaper", true);
         if (!wallpaperEnabled) wallpaper = null;
         int rotationMinutes = json == null ? 0 : integer(json, "wallpaper_rotation_minutes", 0, 0, 1440);
-        int wallpaperDim = json == null ? 0 : integer(json, "wallpaper_dim", 0, 0, 90);
-        int tileOpacity = json == null ? 100 : integer(json, "tile_opacity", 100, 0, 100);
-        boolean wallpaperMotion = json == null ? false : bool(json, "wallpaper_motion", false);
         int dockOpacity = json == null ? 100 : integer(json, "dock_opacity", 100, 30, 100);
         dockOpacity = chosenDockOpacity(choices.getInt(DOCK_OPACITY_KEY, -1), dockOpacity);
         clockFormat = choices.getString(CLOCK_FORMAT_KEY, clockFormat);
@@ -720,10 +760,11 @@ final class Config {
                 json == null ? Collections.emptyList() : raceCalendar(json), cinematic, ambientGlow, appGlow, fadeRows,
                 Math.max(0, idleClockMinutes), keyFilter, dockGlass, glowStyle, wallpaperCaptions, handleViewInputs, tileMenu, dockEvenPadding,
                 dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, wallpaperMoods, gamepadPassthrough,
-                consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
+                consumeVolumeKeys, volumePausesFilter, homeIgnoreChannelKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly, inputsCecStateOnly,
-                Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap, tileOpacity, wallpaperMotion);
+                Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap,
+                settingsKeyClearTask, wallpaperMotion, tileOpacity, videoWallpaper, screensaverVideo, videoDim, videoRotationMinutes);
     }
 
     /**

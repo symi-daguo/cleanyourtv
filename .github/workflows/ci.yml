@@ -67,4 +67,7 @@ jobs:
         run: |
           size=$(stat -c %s launcher/app/build/outputs/apk/release/app-release.apk)
           echo "release APK: $((size / 1024)) KB"
-          test "$size" -lt 589824 || { echo "APK is over 576 KB; the launcher targets 1 GB TVs, keep it small"; exit 1; }
+          # Upstream's gate is 576 KB. This fork ships more than upstream does - the video wallpaper layer, the
+          # usage-ordered grid and the Android 6 build - so the gate moves with it, to 600 KB. The reasoning is
+          # upstream's: the launcher targets 1 GB TVs, so every KB still has to be earned.
+          test "$size" -lt 614400 || { echo "APK is over 600 KB; the launcher targets 1 GB TVs, keep it small"; exit 1; }

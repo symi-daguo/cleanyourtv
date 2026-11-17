@@ -35,7 +35,8 @@ final class GuardKeep {
     }
 
     static boolean offInStandby(Context context) {
-        if (!Compat.isUserUnlocked(context)) return false;
+        UserManager users = context.getSystemService(UserManager.class);
+        if (users != null && !users.isUserUnlocked()) return false;
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_OFF, false);
     }
 
@@ -85,7 +86,7 @@ final class GuardKeep {
     /** Drops the service from the list and puts it back on the next SCREEN_ON. The process has to stay up. */
     static void stepOut(AccessibilityService service) {
         watchScreenOn(service.getApplicationContext());
-        Compat.disableSelf(service);
+        service.disableSelf();
     }
 
     private static void watchScreenOn(Context app) {

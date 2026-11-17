@@ -1,10 +1,8 @@
 package com.gathin.tvhome;
 
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.content.Context;
-import android.os.SystemClock;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -22,18 +20,16 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import android.view.animation.LinearInterpolator;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -41,11 +37,7 @@ import java.util.concurrent.Executors;
 
 /** Displays and rotates a theme's local wallpaper images while Home is visible. */
 final class WallpaperPlayer {
-    /** Length of one Ken Burns pass, and how much extra zoom it adds on top of the 1.05 the drift needs. */
-    private static final long MOTION_MS = 120000L;
-    /** The picture is always scaled by at least this much, so there is room to pan without showing an edge. */
-    private static final float MIN_SCALE = 1.28f;
-    private static final float MOTION_ZOOM = 0f;
+    /** The app context, for reading the bundled pictures out of the assets. */
     private final Context context;
     private final FrameLayout root;
     private final ImageView image;
@@ -56,27 +48,6 @@ final class WallpaperPlayer {
     private final SharedPreferences preferences;
     private final ExecutorService decoder = Executors.newSingleThreadExecutor();
     private final Random random = new Random();
-    /** config.xml wallpaper_motion: slow Ken Burns zoom and drift instead of a still picture. */
-    private boolean motion;
-    /** Pictures bundled in the low-SDK build for a set whose external storage is gone; empty otherwise. */
-    private final List<String> builtinAssets = new ArrayList<>();
-    /** Index of the bundled picture on screen. */
-    private int builtinIndex;
-    /** When Home went to the background, so the time spent there does not count towards the rotation. */
-    private long pausedAt;
-    /** The path the picture walks, redrawn every lap. */
-    private Path driftPath;
-    private final PathMeasure driftMeasure = new PathMeasure();
-    private final float[] driftPos = new float[2];
-    private float driftLength;
-    /** How far along the path the picture is, 0 to 1. */
-    private float driftFraction;
-    /** The fraction of the previous lap, so a new one can be told from the old. */
-    private float lastFraction;
-    /** When the current lap began, in the clock the frames are timed against. */
-    private long driftStartedAt;
-    /** The running drift; parked with pause() when Home goes behind another app. */
-    private ObjectAnimator motionAnimator;
     private final int width;
     /** config wallpaper_true_color: ARGB_8888 instead of RGB_565. */
     private final Bitmap.Config bitmapConfig;
@@ -98,6 +69,29 @@ final class WallpaperPlayer {
     private final String latitude, longitude;
     private LocalDate sunDay;
     private int[] sun;
+    /** config.xml wallpaper_motion: slow Ken Burns drift instead of a still picture. */
+    private boolean motion;
+    /** A video layer covers the picture, so the drift under it would only burn frames. */
+    private boolean motionBlocked;
+    /** Pictures bundled in the low-SDK build for a set whose external storage is gone; empty otherwise. */
+    private final List<String> builtinAssets = new ArrayList<>();
+    /** Index of the bundled picture on screen. */
+    private int builtinIndex;
+    /** The path the picture walks, redrawn every lap. */
+    private Path driftPath;
+    private final PathMeasure driftMeasure = new PathMeasure();
+    private final float[] driftPos = new float[2];
+    private float driftLength;
+    /** How far along the path the picture is, 0 to 1. */
+    private float driftFraction;
+    /** The fraction of the previous lap, so a new one can be told from the old. */
+    private float lastFraction;
+    /** When the current lap began, in the clock the frames are timed against. */
+    private long driftStartedAt;
+    /** Length of one lap of the drift. */
+    private static final long MOTION_MS = 120000L;
+    /** The picture is always scaled by at least this much, so there is room to pan without showing an edge. */
+    private static final float MIN_SCALE = 1.28f;
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.context = context;
@@ -126,10 +120,10 @@ final class WallpaperPlayer {
         image = new ImageView(context);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        motion = config.wallpaperMotion;
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
+        motion = config.wallpaperMotion;
         if (config.wallpaperEnabled && !files.isEmpty()) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -192,18 +186,6 @@ final class WallpaperPlayer {
 
     void start() {
         active = true;
-        // A fade that was interrupted by leaving Home leaves the alpha wherever it stopped - often at 0, which is a
-        // black screen until the next picture arrives. Put it back before anything else.
-        image.animate().cancel();
-        image.setAlpha(1f);
-        // The interval was frozen while Home was in the background, so push the last change forward by however long
-        // that was: the rotation picks up with the same time left on it instead of firing the moment you come back.
-        if (pausedAt > 0) {
-            long parked = System.currentTimeMillis() - pausedAt;
-            long changed = preferences.getLong("changed", 0);
-            if (changed > 0) preferences.edit().putLong("changed", changed + parked).apply();
-            pausedAt = 0;
-        }
         // onTrimMemory drops the picture when Home goes behind another app - opening a heavy one like an ambient-light
         // controller is enough. Without this the set came back to a bare background colour, because the rotation
         // still had time left on it and so had no reason to load anything: the drift then ran over an empty view,
@@ -215,33 +197,127 @@ final class WallpaperPlayer {
                 Bitmap again = decodeAsset(builtinAssets.get(builtinIndex));
                 if (again != null) show(again);
             }
-        } else if (motion) {
-            if (motionAnimator != null && motionAnimator.isPaused()) {
-                motionAnimator.resume();   // continues from the parked fraction, no jump back to the first frame
-            } else {
-                startMotion();
-            }
         }
+        if (motion) startMotion();
         update();
     }
 
     void stop() {
         active = false;
-        // park() keeps the clock: a paused animator holds its current fraction, so the drift and the rotation both
-        // pick up where they left off instead of starting the interval again from zero.
-        pausedAt = System.currentTimeMillis();
-        image.animate().cancel();
-        if (motionAnimator != null && motionAnimator.isRunning()) motionAnimator.pause();
+        image.removeCallbacks(this::stepDrift);
     }
 
-    /** True when a picture is behind the grid. The ambient glow paints the focused app's colour over it, so it goes. */
+    /**
+     * Stops the drift while something else covers the picture. The picture keeps its place underneath and comes back
+     * moving when the layer goes: measured over three minutes on a Hisense VIDAA, letting the drift run under a
+     * video cost about a third of the frames.
+     */
+    void setMotionBlocked(boolean blocked) {
+        if (motionBlocked == blocked) return;
+        motionBlocked = blocked;
+        if (blocked) image.removeCallbacks(this::stepDrift);
+        else if (active) startMotion();
+    }
+
+    /** True when a picture is on screen; Home uses it to keep the glow out of the way of a photo. */
     boolean hasPicture() {
-        return image.getParent() != null;
+        return current != null;
+    }
+
+    /**
+     * The drift, along a path that is drawn afresh every lap.
+     *
+     * Two things were wrong before. The track was a single direction with REVERSE, so the picture retraced the same
+     * diagonal for as long as it was up. Now a lap is a chain of random quadratic curves, drawn once per lap, so the
+     * path is different every time and no two laps trace the same line.
+     *
+     * The picture is placed by the wall clock rather than by an animator's fraction: this board has a ~133 ms hole in
+     * the frame timeline every eleven frames, and with a fraction the picture stopped dead for those frames and then
+     * carried on from where it had been - which reads as a jolt. With the clock a skipped frame is a step to the right
+     * position instead of a stall followed by a catch-up.
+     */
+    private void startMotion() {
+        image.removeCallbacks(this::stepDrift);
+        if (!motion || motionBlocked) {
+            image.setScaleX(1f);
+            image.setScaleY(1f);
+            image.setTranslationX(0f);
+            image.setTranslationY(0f);
+            return;
+        }
+        buildDriftPath(0f, 0f);
+        driftStartedAt = SystemClock.uptimeMillis();
+        image.postOnAnimation(this::stepDrift);
+    }
+
+    /** One step: where the clock says the picture should be by now. */
+    private void stepDrift() {
+        if (!motion || closed || !active || motionBlocked) return;
+        long now = SystemClock.uptimeMillis();
+        float fraction = ((now - driftStartedAt) % MOTION_MS) / (float) MOTION_MS;
+        onDrift(fraction);
+        image.postOnAnimation(this::stepDrift);
+    }
+
+    /**
+     * A closed chain of random curves, starting where the picture currently is and ending back there. Because it
+     * begins and ends at the same spot, a new path can be swapped in the moment a lap ends without the picture
+     * jumping: the walk carries on from exactly where it was, but along a different line.
+     */
+    private void buildDriftPath(float fromX, float fromY) {
+        // The picture is scaled up so it is always wider and taller than the screen, and the walk is kept inside
+        // what that margin allows. A path that wandered further would slide the edge of the picture into view and
+        // leave a black strip along one side, which is what the drift must never do.
+        float marginX = width * (1f - 1f / MIN_SCALE) * 0.5f * 0.55f;
+        float marginY = height * (1f - 1f / MIN_SCALE) * 0.5f * 0.55f;
+        Path path = new Path();
+        float x = fromX, y = fromY;
+        path.moveTo(x, y);
+        for (int i = 0; i < 5; i++) {
+            // Nudged towards a random spot inside the margin, never past it.
+            float targetX = (random.nextBoolean() ? 1 : -1) * marginX * random.nextFloat();
+            float targetY = (random.nextBoolean() ? 1 : -1) * marginY * random.nextFloat();
+            float nextX = clamp(x + (targetX - x) * 0.55f, -marginX, marginX);
+            float nextY = clamp(y + (targetY - y) * 0.55f, -marginY, marginY);
+            // A curve, not a corner. Straight segments made the picture change direction in one frame at every bend,
+            // and the eye reads that as a jolt; a quadratic through a point near the middle keeps the heading
+            // continuous while still letting the line wander anywhere inside the margin.
+            float cx = (x + nextX) * 0.5f + (random.nextFloat() - 0.5f) * marginX * 0.5f;
+            float cy = (y + nextY) * 0.5f + (random.nextFloat() - 0.5f) * marginY * 0.5f;
+            path.quadTo(cx, cy, nextX, nextY);
+            x = nextX; y = nextY;
+        }
+        path.quadTo(x, y, fromX, fromY);   // back to where it started, so the lap joins up
+        driftPath = path;
+        driftMeasure.setPath(path, true);
+        driftLength = driftMeasure.getLength();
+    }
+
+    /** Walks the path at the given fraction of a lap and moves the picture with it. */
+    private void onDrift(float fraction) {
+        if (driftLength <= 0f) return;
+        // A lap that has just begun is a new one: draw a fresh line from here, so no two laps are the same.
+        if (fraction < lastFraction) {
+            driftMeasure.getPosTan(driftLength, driftPos, null);
+            buildDriftPath(driftPos[0], driftPos[1]);
+        }
+        lastFraction = fraction;
+        driftMeasure.getPosTan(fraction * driftLength, driftPos, null);
+        image.setTranslationX(driftPos[0]);
+        image.setTranslationY(driftPos[1]);
+        // No breathing zoom on top of the pan. A few percent of scale moves every pixel of a full-screen picture at
+        // once, which reads as a much bigger change than the pan itself; measured, it was three quarters of the
+        // frame-to-frame difference. The picture is scaled once, by MIN_SCALE, and then only walked around.
+        image.setScaleX(MIN_SCALE);
+        image.setScaleY(MIN_SCALE);
+    }
+
+    private static float clamp(float value, float low, float high) {
+        return value < low ? low : (value > high ? high : value);
     }
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */
     void releaseForMemoryPressure() {
-        image.animate().cancel();
         if (current == null) return;
         image.setImageDrawable(null);
         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
@@ -265,15 +341,17 @@ final class WallpaperPlayer {
     void close() {
         active = false;
         closed = true;
+        image.removeCallbacks(this::stepDrift);
         decoder.shutdownNow();
     }
 
     void update() {
-        if (!active || closed || loading) return;
+        if (!active || closed) return;
         if (files.isEmpty()) {
             advanceBuiltin();
             return;
         }
+        if (loading) return;
         String previous = preferences.getString("image", "");
         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.
         List<File> playable = playable();
@@ -366,51 +444,16 @@ final class WallpaperPlayer {
         return key.toString();
     }
 
-    /**
-     * Puts a picture on screen and releases the previous one after a frame has drawn the new one. A change of
-     * picture fades through black rather than cutting: a hard swap between two photos reads as a flash. The drift
-     * is stopped for the fade and restarted after it, so the two do not fight over the same view.
-     */
+    /** Puts a picture on screen and releases the previous one after a frame has drawn the new one. */
     private void show(Bitmap bitmap) {
         Bitmap old = current;
         current = bitmap;
         // The wallpaper covers the whole root; avoid drawing the fallback colour under it.
         root.setBackground(null);
-        if (old != null && old != bitmap && motion) {
-            // Down to 0.35 rather than 0: fading a picture all the way out puts a black frame between the two, which
-            // is what made the change read as a cut rather than a dissolve.
-            image.animate().cancel();
-            image.animate().alpha(0.35f).setDuration(220).withEndAction(() -> {
-                image.setImageBitmap(bitmap);
-                image.postDelayed(old::recycle, 600);
-                image.animate().alpha(1f).setDuration(420).withEndAction(this::startMotion).start();
-            }).start();
-            return;
-        }
-        image.setAlpha(1f);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
-        startMotion();
     }
 
-    /**
-     * Ken Burns for the picture just shown: 36 seconds of slow zoom with a small drift, from a random
-     * direction so two pictures never travel the same way. The scale never drops below 1.05, which keeps
-     * the drift inside the picture instead of showing an edge.
-     */
-    /** Starts a fresh Ken Burns pass for the picture now on screen; replaces any pass still running. */
-    /**
-     * The drift, driven by the view's own animator rather than a ValueAnimator. ViewPropertyAnimator runs its frames
-     * on the render thread, so the pan stops competing with the UI thread for the frame: measured 31 fps with a
-     * per-frame setScaleX against this panel's 60 Hz, which is what read as stuttering.
-     */
-
-    /**
-     * One ObjectAnimator that never stops, instead of animating out and back through withEndAction. Chaining two
-     * ViewPropertyAnimators left a gap of a frame or two between them every twenty seconds, and the linear
-     * interpolation reversed the direction instantly at the turn - together that is the stutter the eye picks up even
-     * at 30 fps. INFINITE + REVERSE with AccelerateDecelerate has no seam and reaches zero velocity at both ends.
-     */
     /** Bundled pictures rotate a minute at a time when the set gives us no interval to read. */
     private static final long BUILTIN_INTERVAL_MS = 60_000L;
 
@@ -434,122 +477,12 @@ final class WallpaperPlayer {
     private Bitmap decodeAsset(String name) {
         try (InputStream in = context.getAssets().open("wallpapers/" + name)) {
             BitmapFactory.Options options = new BitmapFactory.Options();
+            // Same rule as the pushed collection: half the bytes unless the theme asked for true colour.
             options.inPreferredConfig = bitmapConfig;
             return BitmapFactory.decodeStream(in, null, options);
         } catch (IOException | OutOfMemoryError unreadable) {
             return null;
         }
-    }
-
-    /**
-     * The drift, along a path that is drawn afresh every lap.
-     *
-     * Two things were wrong before. The hardware layer was the first: on this board the texture bind fails with
-     * GL error 0x500 and the retry leaves a ~133 ms hole in the frame timeline every eleven frames, which the eye
-     * reads as a stutter far more than a steady lower rate would. Without the layer the picture is redrawn, but
-     * the frames come evenly.
-     *
-     * The second was the track. A single direction with REVERSE walks the same diagonal back and forth for as long
-     * as the picture is up. Now a lap is a broken line of random segments, drawn once per picture and closed, so the
-     * path is different every time and no two laps trace the same line.
-     */
-    private void startMotion() {
-        image.animate().cancel();
-        image.removeCallbacks(this::stepDrift);
-        if (motionAnimator != null) motionAnimator.cancel();
-        if (!motion) {
-            image.setScaleX(1f);
-            image.setScaleY(1f);
-            image.setTranslationX(0f);
-            image.setTranslationY(0f);
-            return;
-        }
-        image.post(() -> {
-            if (!motion) return;
-            buildDriftPath(0f, 0f);
-            // Driven by the wall clock, not by an animator's fraction. On this board the frame timeline has a ~133 ms
-            // hole every eleven frames; with a fraction the picture stopped dead for those frames and then carried on
-            // from where it had been, which is exactly what reads as a jolt. With the clock the picture is placed
-            // where the time says it should be, so a skipped frame is a step, not a stall.
-            driftStartedAt = SystemClock.uptimeMillis();
-            image.postOnAnimation(this::stepDrift);
-        });
-    }
-
-    /**
-     * A closed broken line of random segments, starting where the picture currently is and ending back there.
-     * Because it begins and ends at the same spot, a new path can be swapped in the moment a lap ends without the
-     * picture jumping: the walk carries on from exactly where it was, but along a different line.
-     */
-    private void buildDriftPath(float fromX, float fromY) {
-        // The picture is scaled up so it is always wider and taller than the screen, and the walk is kept inside
-        // what that margin allows. A path that wandered further would slide the edge of the picture into view and
-        // leave a black strip along one side, which is what the drift must never do.
-        float marginX = width * (1f - 1f / MIN_SCALE) * 0.5f * 0.55f;
-        float marginY = height * (1f - 1f / MIN_SCALE) * 0.5f * 0.72f;
-        Path path = new Path();
-        float x = fromX, y = fromY;
-        path.moveTo(x, y);
-        for (int i = 0; i < 5; i++) {
-            // Nudged towards a random spot inside the margin, never past it.
-            float targetX = (random.nextBoolean() ? 1 : -1) * marginX * random.nextFloat();
-            float targetY = (random.nextBoolean() ? 1 : -1) * marginY * random.nextFloat();
-            float nextX = clamp(x + (targetX - x) * 0.55f, -marginX, marginX);
-            float nextY = clamp(y + (targetY - y) * 0.55f, -marginY, marginY);
-            // A curve, not a corner. Straight segments made the picture change direction in one frame at every bend,
-            // and the eye reads that as a jolt; a quadratic through a point near the middle keeps the heading
-            // continuous while still letting the line wander anywhere inside the margin.
-            float cx = (x + nextX) * 0.5f + (random.nextFloat() - 0.5f) * marginX * 0.5f;
-            float cy = (y + nextY) * 0.5f + (random.nextFloat() - 0.5f) * marginY * 0.5f;
-            path.quadTo(cx, cy, nextX, nextY);
-            x = nextX; y = nextY;
-        }
-        path.quadTo(x, y, fromX, fromY);   // back to where it started, so the lap joins up
-        driftPath = path;
-        driftMeasure.setPath(path, true);
-        driftLength = driftMeasure.getLength();
-    }
-
-    private static float clamp(float value, float low, float high) {
-        return value < low ? low : (value > high ? high : value);
-    }
-
-    /** One step: where the clock says the picture should be by now. */
-    private void stepDrift() {
-        if (!motion || closed) return;
-        long now = SystemClock.uptimeMillis();
-        float fraction = ((now - driftStartedAt) % MOTION_MS) / (float) MOTION_MS;
-        onDrift(fraction);
-        image.postOnAnimation(this::stepDrift);
-    }
-
-    /** Walks the path at the given fraction of a lap and moves the picture with it. */
-    private void onDrift(float fraction) {
-        if (driftLength <= 0f) return;
-        // A lap that has just begun is a new one: draw a fresh line from here, so no two laps are the same.
-        if (fraction < lastFraction) {
-            driftMeasure.getPosTan(driftLength, driftPos, null);
-            buildDriftPath(driftPos[0], driftPos[1]);
-        }
-        lastFraction = fraction;
-        driftMeasure.getPosTan(fraction * driftLength, driftPos, null);
-        image.setTranslationX(driftPos[0]);
-        image.setTranslationY(driftPos[1]);
-        // No breathing zoom on top of the pan. A few percent of scale moves every pixel of a full-screen picture at
-        // once, which reads as a much bigger change than the pan itself; measured, it was three quarters of the
-        // frame-to-frame difference. The picture is scaled once, by MIN_SCALE, and then only walked around.
-        image.setScaleX(MIN_SCALE);
-        image.setScaleY(MIN_SCALE);
-    }
-
-    /** The animator drives this one; it only carries the fraction of the lap. */
-    public void setDriftFraction(float fraction) {
-        driftFraction = fraction;
-        onDrift(fraction);
-    }
-
-    public float getDriftFraction() {
-        return driftFraction;
     }
 
     private Bitmap decode(File file) {
@@ -576,7 +509,7 @@ final class WallpaperPlayer {
             if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
             // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
             // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
-            Bitmap gpu = decoded.copy(Compat.hardwareConfig(), false);
+            Bitmap gpu = decoded.copy(Bitmap.Config.HARDWARE, false);
             if (gpu == null) return decoded;
             decoded.recycle();
             return gpu;

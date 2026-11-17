@@ -1,11 +1,8 @@
 package com.gathin.tvhome;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -42,13 +39,7 @@ final class WallpaperCaptions {
         File file = folder == null ? null : new File(folder, FILE_NAME);
         if (file == null || !file.isFile() || file.length() > 256 * 1024) return Collections.emptyMap();
         try {
-            // java.nio.file is API 26: read the lines with java.io, which every version has.
-            List<String> lines = new ArrayList<>();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-                for (String line = reader.readLine(); line != null; line = reader.readLine()) lines.add(line);
-                return parse(lines);
-            }
+            return parse(Files.readAllLines(file.toPath(), StandardCharsets.UTF_8));
         } catch (Exception e) {
             return Collections.emptyMap();
         }

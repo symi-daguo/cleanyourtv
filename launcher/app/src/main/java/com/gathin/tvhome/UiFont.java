@@ -3,7 +3,6 @@ package com.gathin.tvhome;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Typeface;
-import android.os.Build;
 import android.util.TypedValue;
 
 /**
@@ -18,12 +17,7 @@ final class UiFont {
         TypedValue value = new TypedValue();
         res.getValue(fontString, value, true);
         String name = String.valueOf(value.string);
-        if (name.startsWith("res/")) {
-            // A res/font family is API 26: below it the XML cannot be parsed, so keep the system
-            // face rather than the bundled Outfit. The weights collapse into one, nothing else changes.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return res.getFont(value.resourceId);
-            return Typeface.create("sans-serif", Typeface.NORMAL);
-        }
+        if (name.startsWith("res/")) return res.getFont(value.resourceId);
         return Typeface.create(name, Typeface.NORMAL);
     }
 }

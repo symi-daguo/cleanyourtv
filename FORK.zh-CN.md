@@ -17,6 +17,7 @@
 | **无外部存储的机型**：`Config.dir` 退回应用内部目录；min23 包内自带 5 张图（`src/min23/assets/wallpapers/`），按一分钟轮换并带动态效果，因为这类机器推不了照片也推不了配置 | `Config.java`、`WallpaperPlayer.java`、`launcher/app/src/min23/assets/` |
 | **壁纸动画走 RenderThread**：`ViewPropertyAnimator` 替代 `ValueAnimator`，海信 maxim 上 31fps → 60fps；硬件层保留（去掉会掉回 30fps），代价是 GL 0x500 日志 | `WallpaperPlayer.java` |
 | **内存回收后重载**：`onTrimMemory` 会清空壁纸，`start()` 检查 `current == null` 后重新解码 | `WallpaperPlayer.java` |
+| **视频背景**：`video_wallpaper` / `screensaver_video` 让桌面和待机屏播一段循环静音视频；片源在主题的 `videos/`，外部存储被裁掉的机器用应用私有目录；没有片源就不挂层，零开销 | `VideoLayer.java`、`ClockDream.java`、`MainActivity.java` |
 | **按使用频率排序**：读系统使用统计（需 `appops set ... GET_USAGE_STATS allow`），用得多的排前面，最常用 4 个自动进 dock，无授权时退回字母序 | `AppAdapter.java`、`AndroidManifest.xml` |
 ## 跟上上游
 
@@ -29,16 +30,23 @@
 - **一致**：和上游一样，不用管
 - **落后**：上游加了东西我们没跟（需要手动搬过来）
 - **领先**：我们改的（分两路：够小的提 PR，其余留 Fork）
-- **本地独有**：Fork 特供（当前只有 `Compat.java`）
+- **本地独有**：Fork 特供（当前是 `Compat.java` 和 `VideoLayer.java`）
 
-第一次跑的结果（2026-10-27）：
+跑的结果（2026-11-17，重建到上游 v3.5.0 之后）：
 
 ```
-一致：46 个文件
-落后上游：12 个
-领先上游：4 个
-本地独有：1 个
+一致：66 个文件
+落后上游：2 个
+领先上游：6 个
+本地独有：2 个
 ```
+
+**落后的那 2 个不用追。** 分别是 `GridNavigation.java`（上游 main 未发布的新功能：编辑 dock 时压暗其它格子）和
+`HomeKeyService.java`（上游 main 的一个 bug 修复：`setServiceInfo()` 会清掉 `flagRequestFilterKeyEvents`，
+导致 `key_filter` 的机器收不到按键）。**后者是真修复，已经单独带进来了**；前者是未发布的新功能，等它进 tag 再跟。
+
+**基线是 tag 不是 main。** 上游从 v3.5.0 到 main 已经有 367 个提交，其中绝大多数是「Press:」的新闻条目，
+`launcher/` 里真正变了的只有上面那两个文件。以 tag 为基线才能保证客户拿到的是可复现的版本。
 
 **`RemoteKeys.java` 少的 132 行，核对过了：不用同步。** 逐行 diff 的结果是 135 行新增、15 行改写，新增的全是上游的按键增强（`front:` 前缀、「已在前台时行为不同」、`hold:` 长按、`guide:<package>`、`back/home/recents/mute/sleep/settings/wifi` 动作词、`package/.Activity` 直开），改写的是把 `holdEntries()` 这类私有方法抽象成通用的 `prefixed()`。**没有一处 bug 修复。**
 

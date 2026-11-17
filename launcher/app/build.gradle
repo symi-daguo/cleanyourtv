@@ -27,8 +27,8 @@ android {
         // with "NoClassDefFoundError: RemoteKeys$$ExternalSyntheticLambda1" on an Android 6 set.
         minSdk launcherMinSdk
         targetSdk 34
-        versionCode 13
-        versionName '3.4'
+        versionCode 14
+        versionName '3.5'
     }
 
     sourceSets {

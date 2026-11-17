@@ -20,3 +20,13 @@ traces/
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
 demo-material/
+
+# 宣传片渲染产物：成片/帧序列/配音都不进仓库（13M+253M），只留可复现的
+# index.html + render.py + tts.py + mix.py + script.md
+promo/*.mp4
+promo/frames/
+promo/beats/*.mp3
+promo/beats/beats.json
+
+# 本地工作记忆与渲染产物，不进公开仓库
+.workbuddy/
