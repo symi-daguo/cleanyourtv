@@ -221,6 +221,9 @@ final class Config {
     final boolean videoWallpaper;
     /** A muted video behind the screensaver's clock (config.xml screensaver_video). */
     final boolean screensaverVideo;
+    /** Render the video into a TextureView instead of a SurfaceView (config.xml video_textureview): the choice
+     *  is per board, since the two paths fail differently. */
+    final boolean videoTextureView;
     /** How dark the video is behind the grid, 0 to 90 percent (config.xml video_dim). */
     final int videoDim;
     /** How long one video stays before another is picked (config.xml video_rotation_minutes). */
@@ -312,7 +315,7 @@ final class Config {
                    Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean volumePausesFilter, boolean homeIgnoreChannelKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly, boolean inputsCecStateOnly,
                    int openOnStartNetworkWait, boolean openOnStartOnWake, boolean iconOnlyVpn, String clockFormat, boolean backOpensClock, boolean glowSnap,
                    boolean settingsKeyClearTask, boolean wallpaperMotion, int tileOpacity, boolean videoWallpaper,
-                   boolean screensaverVideo, int videoDim, int videoRotationMinutes) {
+                   boolean screensaverVideo, boolean videoTextureView, int videoDim, int videoRotationMinutes) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -394,6 +397,7 @@ final class Config {
         this.tileOpacity = tileOpacity;
         this.videoWallpaper = videoWallpaper;
         this.screensaverVideo = screensaverVideo;
+        this.videoTextureView = videoTextureView;
         this.videoDim = videoDim;
         this.videoRotationMinutes = videoRotationMinutes;
         this.wallpaperOrder = wallpaperOrder;
@@ -515,6 +519,7 @@ final class Config {
         int tileOpacity = res.getInteger(R.integer.tile_opacity);
         boolean videoWallpaper = res.getBoolean(R.bool.video_wallpaper);
         boolean screensaverVideo = res.getBoolean(R.bool.screensaver_video);
+        boolean videoTextureView = res.getBoolean(R.bool.video_textureview);
         int videoDim = res.getInteger(R.integer.video_dim);
         int videoRotationMinutes = res.getInteger(R.integer.video_rotation_minutes);
         boolean focusOvershoot = res.getBoolean(R.bool.focus_overshoot);
@@ -639,6 +644,7 @@ final class Config {
             tileOpacity = integer(json, "tile_opacity", tileOpacity, 0, 100);
             videoWallpaper = bool(json, "video_wallpaper", videoWallpaper);
             screensaverVideo = bool(json, "screensaver_video", screensaverVideo);
+            videoTextureView = bool(json, "video_textureview", videoTextureView);
             videoDim = integer(json, "video_dim", videoDim, 0, 90);
             videoRotationMinutes = integer(json, "video_rotation_minutes", videoRotationMinutes, 1, 1440);
             focusOvershoot = bool(json, "focus_overshoot", focusOvershoot);
@@ -764,7 +770,7 @@ final class Config {
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly, inputsCecStateOnly,
                 Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap,
-                settingsKeyClearTask, wallpaperMotion, tileOpacity, videoWallpaper, screensaverVideo, videoDim, videoRotationMinutes);
+                settingsKeyClearTask, wallpaperMotion, tileOpacity, videoWallpaper, screensaverVideo, videoTextureView, videoDim, videoRotationMinutes);
     }
 
     /**

@@ -17,7 +17,7 @@
 | **无外部存储的机型**：`Config.dir` 退回应用内部目录；min23 包内自带 5 张图（`src/min23/assets/wallpapers/`），按一分钟轮换并带动态效果，因为这类机器推不了照片也推不了配置 | `Config.java`、`WallpaperPlayer.java`、`launcher/app/src/min23/assets/` |
 | **壁纸动画走 RenderThread**：`ViewPropertyAnimator` 替代 `ValueAnimator`，海信 maxim 上 31fps → 60fps；硬件层保留（去掉会掉回 30fps），代价是 GL 0x500 日志 | `WallpaperPlayer.java` |
 | **内存回收后重载**：`onTrimMemory` 会清空壁纸，`start()` 检查 `current == null` 后重新解码 | `WallpaperPlayer.java` |
-| **视频背景**：`video_wallpaper` / `screensaver_video` 让桌面和待机屏播一段循环静音视频；片源在主题的 `videos/`，外部存储被裁掉的机器用应用私有目录；没有片源就不挂层，零开销。**渲染走 `SurfaceView` 硬件直通而不是 TextureView**——在海信 VIDAA（maxim）上 TextureView 的纹理绑定每几帧失败一次（GL 0x500），30fps 只能跑 21.8；SurfaceView 让解码输出直达显示芯片，GPU 不碰视频帧 | `VideoLayer.java`、`ClockDream.java`、`MainActivity.java` |
+| **视频背景**：`video_wallpaper` / `screensaver_video` 让桌面和待机屏播一段循环静音视频；片源在主题的 `videos/`，外部存储被裁掉的机器用应用私有目录；没有片源就不挂层，零开销。**渲染路径按设备选择**：海信 VIDAA（maxim）走 `SurfaceView` 硬件直通（它的 GPU 纹理绑定每几帧失败一次，GL 0x500）；小米盒子（Amlogic + MIUI）走 `TextureView`（MIUI 的不透明窗口会挡住 SurfaceView 背后的画面，而它的 GPU 走纹理满帧 29.7fps）。`video_textureview` 键切换 | `VideoLayer.java`、`ClockDream.java`、`MainActivity.java` |
 | **按使用频率排序**：读系统使用统计（需 `appops set ... GET_USAGE_STATS allow`），用得多的排前面，最常用 4 个自动进 dock，无授权时退回字母序 | `AppAdapter.java`、`AndroidManifest.xml` |
 ## 跟上上游
 

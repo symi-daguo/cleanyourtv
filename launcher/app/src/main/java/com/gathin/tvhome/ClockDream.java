@@ -34,7 +34,7 @@ public class ClockDream extends DreamService {
         View ambient = findViewById(R.id.dreamAmbient);
         if (ambient != null && ambient.getParent() instanceof FrameLayout) {
             video = VideoLayer.attach(this, (FrameLayout) ambient.getParent(), 1, "screensaver_video",
-                    cfg.screensaverVideo, cfg.videoDim, cfg.videoRotationMinutes, null, null);
+                    cfg.screensaverVideo, cfg.videoDim, cfg.videoRotationMinutes, cfg.videoTextureView, null, null);
         }
     }
 

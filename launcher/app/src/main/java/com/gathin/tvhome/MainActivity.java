@@ -523,7 +523,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // transparent there - one opaque background fill over the whole root and the video is invisible.
         videoLayer = VideoLayer.attach(this, root, root.getChildCount() - beforeWallpaper,
                 "video_wallpaper", cfg.videoWallpaper, cfg.videoDim, cfg.videoRotationMinutes,
-                wallpaperPlayer::releasePicture, this::videoGaveUp);
+                cfg.videoTextureView, wallpaperPlayer::releasePicture, this::videoGaveUp);
         if (videoLayer != null) {
             root.setBackground(null);
             backgroundColor = cfg.backgroundColor;   // kept for the day the layer gives up

@@ -248,6 +248,7 @@ skills/cleanyourtv-cn/scripts/set-wallpaper.sh ~/Pictures/家庭照片 192.168.1
 |---|---|
 | 普通电视（外部存储正常） | 主题文件夹下的 `videos/`，和 `config.json`、`wallpapers/` 放在一起 |
 | 海信 VIDAA 这类（外部存储被裁掉） | 应用私有目录 `/data/data/com.gathin.tvhome/files/videos/` |
+| 小米盒子这类（外部存储正常，adb 非 root） | `/sdcard/Android/data/com.gathin.tvhome/files/videos/` |
 
 **放进私有目录（海信这类机器）**
 
@@ -289,6 +290,16 @@ Mixkit 的许可覆盖个人与商用，但不允许再分发原始文件，所�
 
 `fetch-videos.sh` 默认就是 `SLOW=3.0 FPS=30`：把素材放慢到三分之一、按电视管线习惯的标准 30 帧率交付。
 这个规格是水族馆屏保的原理——移动慢，帧率稳，怎么长看都不晃。
+
+**两种设备两种渲染路径，不用你操心，但要知道原理**：
+
+| 设备 | 路径 | 原因 |
+|---|---|---|
+| 海信 VIDAA（maxim，Android 6） | SurfaceView 硬件直通 | 它的 GPU 绑定视频纹理每几帧失败一次，只能走硬件合成 |
+| 小米盒子（Amlogic，Android 9） | TextureView | MIUI 的窗口不透明，会挡住 SurfaceView 背后的画面；而它的 GPU 走纹理反而满帧 |
+
+默认走 SurfaceView；在小米这类机器上把主题 `config.json` 里写 `"video_textureview": true` 就切换。
+小米盒子的实测：**29.7 fps 满帧、0 掉帧、95% 帧时间 7 ms**——比海信还顺。
 
 **可调的键**（在 `launcher/app/src/main/res/values/config.xml`，或主题的 `config.json` 里覆盖同名项）
 

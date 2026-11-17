@@ -590,4 +590,11 @@
     <!-- How long one video stays before another is picked, in minutes. The clips are short, so five minutes
          gives the room some variety without the picture changing under the family. -->
     <integer name="video_rotation_minutes">5</integer>
+
+    <!-- Render the video into a TextureView instead of a SurfaceView. Which of the two works is per board:
+         on a Hisense VIDAA (maxim) the TextureView's per-frame texture bind fails with GL 0x500 and the
+         SurfaceView's hardware path is smooth, while on a Xiaomi box (Amlogic, Android 9) MIUI's opaque
+         window hides what sits behind a SurfaceView and the TextureView plays fine. Theme key:
+         video_textureview. -->
+    <bool name="video_textureview">false</bool>
 </resources>

@@ -4,9 +4,11 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.util.Log;
+import android.graphics.SurfaceTexture;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -40,15 +42,27 @@ import java.util.Random;
  * own pace, and the video runs at whatever the decoder delivers.
  *
  * <p>The price is that a SurfaceView cannot fade: a clip change is a cut, not a crossfade, and there is no
- * first-frame fade-in. On this hardware the cut is the cheaper artefact by far.
+ * first-frame fade-in. On this hardware the cut is the cheaper artefact by far. The TextureView mode keeps the
+ * fade, and returns to the GPU path with all that path's costs.
  */
-final class VideoLayer implements SurfaceHolder.Callback {
+final class VideoLayer implements SurfaceHolder.Callback, TextureView.SurfaceTextureListener {
     private static final String TAG = "TvHome.Video";
     private static final List<String> EXTENSIONS = Arrays.asList(".mp4", ".webm", ".mkv", ".m4v");
     private static final long MAX_BYTES = 400L * 1024 * 1024;
     private static final String PREFS = "video_rotation";
 
+    /** Which kind of surface the decoder renders into; the two exist because boards disagree about which one
+     *  works. On a Hisense VIDAA (maxim, Android 6.0) a TextureView's per-frame texture bind fails every few
+     *  frames with GL error 0x500 and playback stutters, so the frames go to a SurfaceView whose buffer the
+     *  display hardware composites directly. On a Xiaomi box (Amlogic, Android 9) it is the other way round:
+     *  MIUI's window is an opaque RGBx surface that hides whatever sits behind a SurfaceView, while the
+     *  Amlogic GPU binds its own decoded format through a TextureView without complaint. config.xml's
+     *  video_textureview picks, and a theme's config.json can override it per device. */
+    private final boolean useTexture;
+    private final TextureView texture;
     private final SurfaceView surfaceView;
+    /** The surface the player renders into, whichever view provided it. */
+    private Surface readySurface;
     private final List<File> files;
     private final long interval;
     private final SharedPreferences prefs;
@@ -59,7 +73,6 @@ final class VideoLayer implements SurfaceHolder.Callback {
     /** Called when every clip has failed: Home must bring the picture back. */
     private final Runnable onExhausted;
     private MediaPlayer player;
-    private Surface surface;
     private boolean active;
     private int failures;
     private boolean reported;
@@ -75,11 +88,12 @@ final class VideoLayer implements SurfaceHolder.Callback {
      * @param onExhausted  run when every clip has failed and the layer has given up.
      */
     static VideoLayer attach(Context ctx, FrameLayout root, int index, String key, boolean on, int dim, int minutes,
-                             Runnable onFirstFrame, Runnable onExhausted) {
+                             boolean useTexture, Runnable onFirstFrame, Runnable onExhausted) {
         if (!on) return null;
         List<File> files = videos(ctx);
         if (files.isEmpty()) return null;
-        return new VideoLayer(ctx, root, index, files, dim, Math.max(1, minutes) * 60_000L, onFirstFrame, onExhausted);
+        return new VideoLayer(ctx, root, index, files, dim, Math.max(1, minutes) * 60_000L, useTexture,
+                onFirstFrame, onExhausted);
     }
 
     /** The clips: the theme folder's videos/ first, the app's own folder when the theme folder is not there. */
@@ -103,21 +117,33 @@ final class VideoLayer implements SurfaceHolder.Callback {
     }
 
     private VideoLayer(Context ctx, FrameLayout root, int index, List<File> files, int dim, long interval,
-                       Runnable onFirstFrame, Runnable onExhausted) {
+                       boolean useTexture, Runnable onFirstFrame, Runnable onExhausted) {
         this.files = files;
         this.interval = interval;
         this.onFirstFrame = onFirstFrame;
         this.onExhausted = onExhausted;
+        this.useTexture = useTexture;
         prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        surfaceView = new SurfaceView(ctx);
-        surfaceView.getHolder().addCallback(this);
-        // The decoder scales into whatever buffer the surface has; leaving it at the screen's size keeps a
-        // 16:9 clip pixel-exact on a 16:9 panel, and the holder's own scaling covers the rest.
-        surfaceView.setZOrderOnTop(false);
-        surfaceView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         int at = Math.max(0, Math.min(index, root.getChildCount()));
-        root.addView(surfaceView, at, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams full = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        if (useTexture) {
+            texture = new TextureView(ctx);
+            texture.setAlpha(0f);   // faded in on the first rendered frame, so no black flash
+            texture.setSurfaceTextureListener(this);
+            texture.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            root.addView(texture, at, full);
+            surfaceView = null;
+        } else {
+            surfaceView = new SurfaceView(ctx);
+            surfaceView.getHolder().addCallback(this);
+            // The decoder scales into whatever buffer the surface has; leaving it at the screen's size keeps a
+            // 16:9 clip pixel-exact on a 16:9 panel, and the holder's own scaling covers the rest.
+            surfaceView.setZOrderOnTop(false);
+            surfaceView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            root.addView(surfaceView, at, full);
+            texture = null;
+        }
         if (dim > 0) {
             View shade = new View(ctx);
             shade.setBackgroundColor((dim * 255 / 100) << 24);
@@ -129,42 +155,80 @@ final class VideoLayer implements SurfaceHolder.Callback {
 
     void start() {
         active = true;
-        Surface s = surface;
+        Surface s = readySurface;
         if (s != null && s.isValid()) play();
     }
 
     /** Releases the decoder; Home calls this in onPause so apps get it straight away. */
     void stop() {
         active = false;
-        surfaceView.removeCallbacks(rotate);
+        View host = useTexture ? texture : surfaceView;
+        if (host != null) host.removeCallbacks(rotate);
         release();
     }
 
     void close() {
         stop();
-        if (surface != null) {
-            surface.release();
-            surface = null;
-        }
+        onSurfaceGone();
     }
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        surface = holder.getSurface();
-        play();
+        onSurfaceReady(holder.getSurface());
     }
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        surface = holder.getSurface();
+        onSurfaceReady(holder.getSurface());
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
+        onSurfaceGone();
+    }
+
+    @Override
+    public void onSurfaceTextureAvailable(SurfaceTexture st, int width, int height) {
+        onSurfaceReady(new Surface(st));
+    }
+
+    @Override
+    public void onSurfaceTextureSizeChanged(SurfaceTexture st, int width, int height) {
+    }
+
+    @Override
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture st) {
+        onSurfaceGone();
+        return true;
+    }
+
+    @Override
+    public void onSurfaceTextureUpdated(SurfaceTexture st) {
+        // The TextureView is faded out until the first frame lands. Some players report
+        // MEDIA_INFO_VIDEO_RENDERING_START and some (the Amlogic one on a Xiaomi box) never do, so the
+        // frame's own callback is what the fade and the picture release wait for: it cannot be missed.
+        firstFrame();
+    }
+
+    /** The first frame is on screen: fade the layer in and let the picture underneath go. */
+    private void firstFrame() {
+        if (reported) return;
+        reported = true;
+        failures = 0;
+        if (useTexture && texture != null) texture.animate().alpha(1f).setDuration(900).start();
+        if (onFirstFrame != null) onFirstFrame.run();
+    }
+
+    private void onSurfaceReady(Surface s) {
+        readySurface = s;
+        play();
+    }
+
+    private void onSurfaceGone() {
         release();
-        if (surface != null) {
-            surface.release();
-            surface = null;
+        if (readySurface != null) {
+            readySurface.release();
+            readySurface = null;
         }
     }
 
@@ -183,24 +247,24 @@ final class VideoLayer implements SurfaceHolder.Callback {
     }
 
     private void play() {
-        if (!active || surface == null || player != null || files.isEmpty()) return;
+        if (!active || readySurface == null || player != null || files.isEmpty()) return;
         File video = current();
         long left = interval - (System.currentTimeMillis() - prefs.getLong("changed", 0));
-        surfaceView.removeCallbacks(rotate);
-        surfaceView.postDelayed(rotate, Math.max(1_000L, left));
+        View host = useTexture ? texture : surfaceView;
+        host.removeCallbacks(rotate);
+        host.postDelayed(rotate, Math.max(1_000L, left));
         MediaPlayer mp = new MediaPlayer();
         player = mp;
         try {
             mp.setDataSource(video.getPath());
-            mp.setSurface(surface);
+            mp.setSurface(readySurface);
             mp.setVolume(0f, 0f);
             mp.setLooping(true);
             mp.setOnInfoListener((p, what, extra) -> {
-                if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START && !reported) {
-                    reported = true;
-                    failures = 0;
-                    if (onFirstFrame != null) onFirstFrame.run();
-                }
+                // The SurfaceView has no frame callback of its own, so its first frame is known from here -
+                // when the player reports it. The TextureView path learns the same thing from
+                // onSurfaceTextureUpdated, which some players never reach this event for.
+                if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) firstFrame();
                 return false;
             });
             mp.setOnErrorListener((p, what, extra) -> {
