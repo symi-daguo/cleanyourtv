@@ -226,10 +226,15 @@ final class WallpaperPlayer {
      */
     void releasePicture() {
         image.removeCallbacks(this::stepDrift);
-        if (current == null) return;
-        image.setImageDrawable(null);
-        current = null;
-        displayed = "";
+        // Aerial (HaloTV's base) found this on a Hisense VIDAA MTK9652: the decoder fails at times and
+        // leaves the video plane black for seconds. Keep the picture's bitmap but hide it - three or
+        // four MB buys an instant fallback, and the drift is stopped so it costs no frames.
+        image.setVisibility(View.GONE);
+    }
+
+    /** The video failed: show the picture again at once, no decoding and no black plane. */
+    void restorePicture() {
+        image.setVisibility(View.VISIBLE);
     }
 
     /** True when a picture is on screen; Home uses it to keep the glow out of the way of a photo. */

@@ -72,6 +72,8 @@ final class VideoLayer implements SurfaceHolder.Callback, TextureView.SurfaceTex
     private final Runnable onFirstFrame;
     /** Called when every clip has failed: Home must bring the picture back. */
     private final Runnable onExhausted;
+    /** Called on a single play failure: the picture comes back until the next frame. */
+    private final Runnable onPlaybackFailed;
     private MediaPlayer player;
     private boolean active;
     private int failures;
@@ -88,12 +90,12 @@ final class VideoLayer implements SurfaceHolder.Callback, TextureView.SurfaceTex
      * @param onExhausted  run when every clip has failed and the layer has given up.
      */
     static VideoLayer attach(Context ctx, FrameLayout root, int index, String key, boolean on, int dim, int minutes,
-                             boolean useTexture, Runnable onFirstFrame, Runnable onExhausted) {
+                             boolean useTexture, Runnable onFirstFrame, Runnable onExhausted, Runnable onPlaybackFailed) {
         if (!on) return null;
         List<File> files = videos(ctx);
         if (files.isEmpty()) return null;
         return new VideoLayer(ctx, root, index, files, dim, Math.max(1, minutes) * 60_000L, useTexture,
-                onFirstFrame, onExhausted);
+                onFirstFrame, onExhausted, onPlaybackFailed);
     }
 
     /** The clips: the theme folder's videos/ first, the app's own folder when the theme folder is not there. */
@@ -117,11 +119,12 @@ final class VideoLayer implements SurfaceHolder.Callback, TextureView.SurfaceTex
     }
 
     private VideoLayer(Context ctx, FrameLayout root, int index, List<File> files, int dim, long interval,
-                       boolean useTexture, Runnable onFirstFrame, Runnable onExhausted) {
+                       boolean useTexture, Runnable onFirstFrame, Runnable onExhausted, Runnable onPlaybackFailed) {
         this.files = files;
         this.interval = interval;
         this.onFirstFrame = onFirstFrame;
         this.onExhausted = onExhausted;
+        this.onPlaybackFailed = onPlaybackFailed;
         this.useTexture = useTexture;
         prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         int at = Math.max(0, Math.min(index, root.getChildCount()));
@@ -212,10 +215,11 @@ final class VideoLayer implements SurfaceHolder.Callback, TextureView.SurfaceTex
 
     /** The first frame is on screen: fade the layer in and let the picture underneath go. */
     private void firstFrame() {
-        if (reported) return;
+        if (!reported && useTexture && texture != null) texture.animate().alpha(1f).setDuration(900).start();
         reported = true;
         failures = 0;
-        if (useTexture && texture != null) texture.animate().alpha(1f).setDuration(900).start();
+        // Every time a frame lands - including a retry after a failure - the fallback picture goes
+        // back behind the video. On a SurfaceView a visible picture in the window would cover it.
         if (onFirstFrame != null) onFirstFrame.run();
     }
 
@@ -268,24 +272,44 @@ final class VideoLayer implements SurfaceHolder.Callback, TextureView.SurfaceTex
                 return false;
             });
             mp.setOnErrorListener((p, what, extra) -> {
+                // Aerial (the base of HaloTV) learned this on the Hisense VIDAA MTK9652: the decoder
+                // fails at times and the same film plays fine when tried again. Dropping a film on the
+                // first error leaves the owner with fewer clips every day. Retry the same one, move to
+                // the next only after three in a row, and keep the still picture if nothing plays.
                 Log.w(TAG, "Cannot play " + video.getName() + " (" + what + "/" + extra + ")");
-                skip(video);
+                retryOrSkip(video);
                 return true;
             });
             mp.setOnPreparedListener(MediaPlayer::start);
             mp.prepareAsync();
         } catch (Exception e) {
             Log.w(TAG, "Cannot open " + video.getName(), e);
-            skip(video);
+            retryOrSkip(video);
         }
     }
 
-    /** Drops a file that will not play and moves on to another. */
-    private void skip(File bad) {
-        files.remove(bad);
-        prefs.edit().putLong("changed", 0).apply();
+    /**
+     * A failed play is usually transient on the boards this fork targets (see the error listener).
+     * The same clip gets up to three tries before it is set aside; a clip set aside comes back at the
+     * next rotation instead of being lost for the session. After six tries with nothing playing the
+     * layer gives up and Home restores the still picture - no black video plane.
+     */
+    private void retryOrSkip(File bad) {
         release();
-        if (++failures < 5) play();
+        // The decoder just failed: the video plane may go black until the retry's first frame.
+        // Put the picture back for that window (Aerial's issue #1251 on Hisense MTK9652).
+        if (onPlaybackFailed != null) onPlaybackFailed.run();
+        if (++failures < 3) {
+            // Same film, same saved position: a decoder that failed once often plays on the retry.
+            prefs.edit().putLong("changed", System.currentTimeMillis() - interval + 2_000L).apply();
+            play();
+            return;
+        }
+        // Three in a row on one film: a different one may play. The saved name is cleared so current()
+        // picks a new clip; the bad one stays in the list and comes back on a later rotation.
+        prefs.edit().putString("file", "").putLong("changed", 0).apply();
+        Log.w(TAG, "Three failures on " + bad.getName() + " - rotating to another clip");
+        if (failures < 6) play();
         else if (onExhausted != null) onExhausted.run();
     }
 
